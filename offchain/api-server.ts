@@ -54,6 +54,7 @@ const relayerWallet = new Wallet(RELAYER_PK, provider);
 const relayer = new NonceManager(relayerWallet);
 
 let escrow: Contract;
+let network = "local"; // "hedera-testnet" | "hedera-mainnet" | "local"
 let nextCheckoutId = Math.floor(Date.now() / 1000) % 1_000_000; // unique-ish per boot
 
 // sybil gate: one human -> one active demo checkout
@@ -76,7 +77,9 @@ async function boot() {
     escrow = new Contract(await c.getAddress(), ARTIFACT.abi, relayer);
     console.log(`[api] DEMO MODE — deployed fresh escrow at ${await escrow.getAddress()}`);
   }
-  console.log(`[api] relayer/verifier: ${relayerWallet.address} rpc: ${RPC}`);
+  const chainId = Number((await provider.getNetwork()).chainId);
+  network = chainId === 296 ? "hedera-testnet" : chainId === 295 ? "hedera-mainnet" : "local";
+  console.log(`[api] relayer/verifier: ${relayerWallet.address} rpc: ${RPC} network: ${network} (chainId ${chainId})`);
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +159,8 @@ async function describeCheckout(id: number) {
     deposit: c.deposit.toString(),
     deadline: Number(c.deadline),
     status: ["None", "Created", "Funded", "Released", "Resolved"][Number(c.status)],
+    network,
+    hcsTopic: process.env.HCS_TOPIC_ID ?? null,
     items,
   };
 }
@@ -203,12 +208,17 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
   return {
     item: item.name,
     verdict: verdict.pass ? "PASS" : "FAIL",
+    conditionOk: verdict.conditionOk,
+    nonceOk: verdict.nonceOk,
     reason: verdict.reason,
     brain: verdict.brain,
     imageHash: stored.imageHash,
     evidenceUri: stored.uri,
     storageBackend: stored.backend,
+    signature: sig,             // the verifier's secp256k1 signature over the verdict
+    verifier: relayerWallet.address,
     txHash: receipt?.hash,
+    verifiedAt: new Date().toISOString(),
     checkout: state,
   };
 }
@@ -253,7 +263,7 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === "OPTIONS") return json(res, 204, {});
     if (path === "/api/health") {
-      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, worldId: process.env.WORLD_APP_ID ? "live" : "simulator" });
+      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, network, hcsTopic: process.env.HCS_TOPIC_ID ?? null, worldId: process.env.WORLD_APP_ID ? "live" : "simulator" });
     }
     if (path === "/api/verify-human" && req.method === "POST") {
       const out = await verifyHuman(await readBody(req));

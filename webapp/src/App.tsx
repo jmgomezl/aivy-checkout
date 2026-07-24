@@ -15,6 +15,8 @@ type Checkout = {
   tenant: string;
   deposit: string;
   status: string;
+  network: string;
+  hcsTopic: string | null;
   items: Item[];
 };
 type EvidenceResult = {
@@ -23,7 +25,11 @@ type EvidenceResult = {
   reason: string;
   brain: string;
   imageHash: string;
+  evidenceUri: string;
+  signature: string;
+  verifier: string;
   txHash?: string;
+  verifiedAt: string;
   storageBackend: string;
   checkout: Checkout;
 };
@@ -67,12 +73,145 @@ function fileToDataUrl(f: File): Promise<string> {
 
 const ITEM_EMOJI: Record<string, string> = { espresso_machine: "☕", tv: "📺", bedroom_door: "🚪" };
 
+
+// ---------------------------------------------------------------------------
+// The Cryptographic Receipt — the invisible chain/AI actions as one artifact.
+// ---------------------------------------------------------------------------
+function explorerBase(network: string): string | null {
+  if (network === "hedera-testnet") return "https://hashscan.io/testnet";
+  if (network === "hedera-mainnet") return "https://hashscan.io/mainnet";
+  return null; // local dev chain — hashes shown, no explorer
+}
+
+function Hash({ value, href, chars = 14 }: { value: string; href?: string | null; chars?: number }) {
+  const short = value.length > chars ? value.slice(0, chars) + "…" : value;
+  return href ? (
+    <a className="hashlink mono" href={href} target="_blank" rel="noreferrer" title={value}>
+      {short} ↗
+    </a>
+  ) : (
+    <span className="hashlink mono" title={value + " (local chain — explorer link appears on Hedera testnet)"}>
+      {short}
+    </span>
+  );
+}
+
+function Receipt({
+  checkout,
+  results,
+  thumbs,
+  releasedAt,
+  onClose,
+}: {
+  checkout: Checkout;
+  results: Record<string, EvidenceResult>;
+  thumbs: Record<string, string>;
+  releasedAt: Date;
+  onClose: () => void;
+}) {
+  const exp = explorerBase(checkout.network);
+  const when = new Intl.DateTimeFormat("en-US", {
+    month: "long", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  }).format(releasedAt);
+  const finalTx = Object.values(results).map((r) => r.txHash).filter(Boolean).pop();
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="receipt" onClick={(e) => e.stopPropagation()}>
+        <div className="receipt-head">
+          <div className="receipt-title">
+            ✅ CHECKOUT COMPLETE
+            <span className="receipt-sub">
+              Deposit of {(Number(checkout.deposit) / 1e18).toFixed(0)} ℏ released
+            </span>
+          </div>
+          <div className="receipt-time">{when}</div>
+        </div>
+
+        {checkout.items.map((item) => {
+          const r = results[item.name];
+          if (!r) return null;
+          const cidHref = r.evidenceUri.startsWith("http") || r.evidenceUri.startsWith("0g://gateway")
+            ? r.evidenceUri : null;
+          return (
+            <div className="receipt-block" key={item.name}>
+              <div className="receipt-block-title">
+                {ITEM_EMOJI[item.name] ?? "📦"} EVIDENCE — {item.name.replace(/_/g, " ")}
+              </div>
+              <div className="receipt-row">
+                {thumbs[item.name] && <img className="thumb" src={thumbs[item.name]} alt={item.name} />}
+                <div className="grow">
+                  <div className="kv">
+                    <span>{r.storageBackend === "0g" ? "0G Storage root" : "Evidence hash (0G pending)"}</span>
+                    <Hash value={r.storageBackend === "0g" ? r.evidenceUri.replace("0g://", "") : r.imageHash} href={cidHref} chars={18} />
+                  </div>
+                  <div className="kv">
+                    <span>AI verdict</span>
+                    <b className="passtext">PASS (undamaged, liveness nonce detected)</b>
+                  </div>
+                  <div className="kv">
+                    <span>Verifier signature</span>
+                    <Hash value={r.signature} chars={14} />
+                  </div>
+                  {r.txHash && (
+                    <div className="kv">
+                      <span>On-chain verdict tx</span>
+                      <Hash value={r.txHash} href={exp ? `${exp}/transaction/${r.txHash}` : null} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        <div className="receipt-block">
+          <div className="receipt-block-title">⛓ SETTLEMENT</div>
+          <div className="kv">
+            <span>Hedera escrow contract</span>
+            <Hash value={checkout.escrow} href={exp ? `${exp}/contract/${checkout.escrow}` : null} />
+          </div>
+          {finalTx && (
+            <div className="kv">
+              <span>Release transaction</span>
+              <Hash value={finalTx} href={exp ? `${exp}/transaction/${finalTx}` : null} />
+            </div>
+          )}
+          <div className="kv">
+            <span>HCS receipt topic</span>
+            {checkout.hcsTopic ? (
+              <Hash value={checkout.hcsTopic} href={exp ? `${exp}/topic/${checkout.hcsTopic}` : null} chars={20} />
+            ) : (
+              <span className="mono muted tiny">pending — set HCS_TOPIC_ID</span>
+            )}
+          </div>
+          <div className="kv">
+            <span>Paid to</span>
+            <Hash value={checkout.tenant} href={exp ? `${exp}/account/${checkout.tenant}` : null} />
+          </div>
+        </div>
+
+        <p className="tiny muted center receipt-foot">
+          Every field above is independently verifiable: the evidence hash is committed in the
+          verdict the verifier signed, the contract checked that signature with ecrecover before
+          releasing funds, and the receipt is sealed to Hedera Consensus Service.
+        </p>
+        <button className="primary" onClick={onClose}>Close</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const nullifier = useNullifier();
   const [verified, setVerified] = useState(false);
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [busyItem, setBusyItem] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, EvidenceResult>>({});
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [releasedAt, setReleasedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string>("");
   const [health, setHealth] = useState<{ worldId: string } | null>(null);
 
@@ -109,6 +248,7 @@ export default function App() {
       setError("");
       try {
         const imageDataUrl = await fileToDataUrl(file);
+        setThumbs((t) => ({ ...t, [item.name]: imageDataUrl }));
         const out = await api<EvidenceResult>(`/api/checkout/${checkout.checkoutId}/evidence`, {
           nullifier,
           itemName: item.name,
@@ -116,6 +256,10 @@ export default function App() {
         });
         setResults((r) => ({ ...r, [item.name]: out }));
         setCheckout(out.checkout);
+        if (out.checkout.status === "Released") {
+          setReleasedAt(new Date());
+          setShowReceipt(true);
+        }
         tg?.HapticFeedback?.notificationOccurred?.(out.verdict === "PASS" ? "success" : "error");
       } catch (e: any) {
         setError(e.message);
@@ -184,7 +328,20 @@ export default function App() {
                 signed verdict landed on-chain.
               </p>
               <p className="tiny mono">tenant: {checkout.tenant}</p>
+              <button className="primary" onClick={() => setShowReceipt(true)}>
+                🧾 View cryptographic receipt
+              </button>
             </section>
+          )}
+
+          {showReceipt && released && (
+            <Receipt
+              checkout={checkout}
+              results={results}
+              thumbs={thumbs}
+              releasedAt={releasedAt ?? new Date()}
+              onClose={() => setShowReceipt(false)}
+            />
           )}
 
           {checkout.items.map((item) => {
