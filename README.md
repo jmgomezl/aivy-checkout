@@ -72,12 +72,32 @@ aivy-checkout/
   foundry.toml
 ```
 
-## Next stages (not yet built)
-- **Stage 2 (hardest):** `CheckoutEscrow` contract (create → deposit → per-item
-  verify → all-pass release / timeout resolve) + Node relayer (verifier signer +
-  event→HCS logger). Must reuse the proven `ItemVerdict` digest scheme unchanged.
-- **Stage 3:** 0G Storage upload + Aivy vision agent prompt.
-- **Stage 4:** Telegram Mini App (OculusVault) — World ID auth, checklist, camera.
+## Stage 2 + 3 — DONE ✅
+
+- `src/CheckoutEscrow.sol` — full itemized escrow state machine, 12/12 tests
+  (happy / FAIL-locked / timeout→host / replay / wrong-signer / TEE keyswap).
+- `offchain/relayer.ts` — signs verdicts, submits, listens, seals receipts to
+  HCS (`@hashgraph/sdk`) with loud file fallback.
+- `offchain/vision-agent.ts` — Claude vision verifier (adversarial prompt,
+  structured verdict) with deterministic offline mock.
+- `offchain/storage-0g.ts` — 0G Storage upload with local content-addressed
+  fallback (same keccak hash on-chain either way).
+- `offchain/e2e-demo.ts` — **the whole loop proven on a local Anvil chain**:
+  deposit → nonce commit → evidence → AI verdict → signed release, THEN the
+  rejection path (FAIL verdict keeps funds locked) and timeout→host payout.
+
+```bash
+anvil &         # local chain
+forge build
+cd offchain && npm i && npm run e2e
+```
+
+## Remaining
+- **Stage 4:** Telegram Mini App (OculusVault) — World ID auth (Simulator),
+  checklist UI, camera capture, push to relayer.
+- Venue tasks: Hedera testnet deploy (`npm run deploy`), HCS topic + creds,
+  `probe-0g.ts` against real 0G Compute (TEE-signed vs relayer-signed tripwire),
+  `ANTHROPIC_API_KEY` for real vision.
 
 ## Toolchain
 Foundry (`forge`), Node 20+, npm. Deploy target: Hedera testnet EVM via a

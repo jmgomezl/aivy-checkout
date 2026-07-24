@@ -8,9 +8,11 @@
     "probe:0g": "tsx probe-0g.ts",
     "parity": "tsx parity-check.ts",
     "relayer": "tsx relayer.ts",
-    "deploy": "tsx deploy.ts"
+    "deploy": "tsx deploy.ts",
+    "e2e": "tsx e2e-demo.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@hashgraph/sdk": "^2.81.0",
     "ethers": "^6.13.0"
   },
