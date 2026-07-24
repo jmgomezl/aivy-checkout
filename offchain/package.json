@@ -9,7 +9,8 @@
     "parity": "tsx parity-check.ts",
     "relayer": "tsx relayer.ts",
     "deploy": "tsx deploy.ts",
-    "e2e": "tsx e2e-demo.ts"
+    "e2e": "tsx e2e-demo.ts",
+    "api": "tsx api-server.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
@@ -17,6 +18,7 @@
     "ethers": "^6.13.0"
   },
   "devDependencies": {
+    "esbuild": "^0.28.1",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }

@@ -114,9 +114,14 @@ async function judgeWithClaude(input: VisionInput): Promise<VisionVerdict> {
 }
 
 function judgeMock(input: VisionInput): VisionVerdict {
+  // Filename OR content markers fail — lets API-driven demos exercise the
+  // rejection path (upload any file containing the text "damaged").
   const name = basename(input.imagePath).toLowerCase();
-  const conditionOk = !name.includes("damaged") && !name.includes("fail");
-  const nonceOk = !name.includes("nononce");
+  let content = "";
+  try { content = readFileSync(input.imagePath).toString("latin1", 0, 4096).toLowerCase(); } catch {}
+  const blob = name + " " + content;
+  const conditionOk = !blob.includes("damaged") && !blob.includes("fail");
+  const nonceOk = !blob.includes("nononce");
   console.warn(
     "[vision] ⚠️  ANTHROPIC_API_KEY not set — using deterministic MOCK verdict " +
       `(filename heuristics) for ${name}. Set the key for real vision judging.`
