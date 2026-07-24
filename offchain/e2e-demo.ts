@@ -53,9 +53,12 @@ async function main() {
   (host as any).address = await host.getAddress();
   (tenant as any).address = await tenant.getAddress();
 
+  const relayerAddr = relayerWallet.address;
+  const tenantAddr = await tenant.getAddress();
+
   // Fund the actors directly (anvil cheatcode) — independent of anvil's mnemonic.
-  for (const w of [relayer, host, tenant]) {
-    await provider.send("anvil_setBalance", [w.address, "0x21E19E0C9BAB2400000"]); // 10,000 ETH
+  for (const a of [relayerAddr, await host.getAddress(), tenantAddr]) {
+    await provider.send("anvil_setBalance", [a, "0x21E19E0C9BAB2400000"]); // 10,000 ETH
   }
 
   // -- deploy ---------------------------------------------------------------
@@ -64,11 +67,11 @@ async function main() {
   );
   const escrow = (await (async () => {
     const f = new ContractFactory(artifact.abi, artifact.bytecode.object, relayer);
-    const c = await f.deploy(relayer.address); // relayer key = verifier (baseline)
+    const c = await f.deploy(relayerAddr); // relayer key = verifier (baseline)
     await c.waitForDeployment();
     return new Contract(await c.getAddress(), artifact.abi, relayer);
   })()) as Contract;
-  console.log(`\n[1] deployed CheckoutEscrow at ${await escrow.getAddress()} (verifier=${relayer.address})`);
+  console.log(`\n[1] deployed CheckoutEscrow at ${await escrow.getAddress()} (verifier=${relayerAddr})`);
 
   const deposit = parseEther("200");
   const now = (await provider.getBlock("latest"))!.timestamp;
@@ -79,7 +82,7 @@ async function main() {
   // HAPPY PATH — checkout #1
   // ==========================================================================
   console.log("\n=== HAPPY PATH (checkout 1) ===");
-  await (await escrow.connect(host).getFunction("createCheckout")(1n, tenant.address, deposit, deadline, itemIds)).wait();
+  await (await escrow.connect(host).getFunction("createCheckout")(1n, tenantAddr, deposit, deadline, itemIds)).wait();
   for (const item of ITEMS) {
     await (await escrow.connect(host).getFunction("commitNonce")(1n, itemIdOf(item.name), keccak256(toUtf8Bytes(item.nonce)))).wait();
   }
@@ -88,7 +91,7 @@ async function main() {
   await (await escrow.connect(tenant).getFunction("deposit")(1n, { value: deposit })).wait();
   console.log(`[3] tenant deposited 200 HBAR-equivalent (escrow balance: ${await provider.getBalance(escrow.getAddress())})`);
 
-  const tenantBefore = await provider.getBalance(tenant.address);
+  const tenantBefore = await provider.getBalance(tenantAddr);
 
   for (const item of ITEMS) {
     const photo = fakePhoto("/tmp/aivy-e2e", `${item.name}-clean`);
@@ -109,7 +112,7 @@ async function main() {
   }
 
   const c1 = await escrow.getFunction("getCheckout")(1n);
-  const tenantAfter = await provider.getBalance(tenant.address);
+  const tenantAfter = await provider.getBalance(tenantAddr);
   console.log(`[5] ✅ status=${c1.status} (3=Released) — tenant received ${(tenantAfter - tenantBefore) / 10n ** 18n} ETH-units of deposit`);
   if (c1.status !== 3n) throw new Error("happy path did not release!");
 
@@ -118,7 +121,7 @@ async function main() {
   // ==========================================================================
   console.log("\n=== FAILURE PATH (checkout 2) ===");
   const deadline2 = (await provider.getBlock("latest"))!.timestamp + 3600;
-  await (await escrow.connect(host).getFunction("createCheckout")(2n, tenant.address, deposit, deadline2, [itemIdOf("tv")])).wait();
+  await (await escrow.connect(host).getFunction("createCheckout")(2n, tenantAddr, deposit, deadline2, [itemIdOf("tv")])).wait();
   await (await escrow.connect(host).getFunction("commitNonce")(2n, itemIdOf("tv"), keccak256(toUtf8Bytes(ITEMS[1].nonce)))).wait();
   await (await escrow.connect(tenant).getFunction("deposit")(2n, { value: deposit })).wait();
 

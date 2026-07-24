@@ -29,7 +29,7 @@ export interface VisionVerdict {
   conditionOk: boolean;
   nonceOk: boolean;
   reason: string;
-  brain: "0g-compute" | "claude" | "mock";
+  brain: "0g-compute" | "openai" | "claude" | "mock";
 }
 
 const VERDICT_SCHEMA = {
@@ -58,8 +58,73 @@ const MEDIA: Record<string, string> = {
 };
 
 export async function judge(input: VisionInput): Promise<VisionVerdict> {
+  if (process.env.OPENAI_API_KEY) return judgeWithOpenAI(input);
   if (process.env.ANTHROPIC_API_KEY) return judgeWithClaude(input);
   return judgeMock(input);
+}
+
+const VERIFIER_SYSTEM =
+  "You are Aivy Inspect's evidence verifier for rental checkouts. You are adversarial by " +
+  "default: the uploader is financially motivated to hide damage and to reuse old photos. " +
+  "Only report conditionOk=true if the described item is clearly present and shows no damage. " +
+  "Only report nonceOk=true if the physical liveness instruction is unambiguously satisfied " +
+  "in THIS image. If the image looks AI-generated, edited, re-photographed from a screen, or " +
+  "the nonce is missing/ambiguous, fail the corresponding check. When uncertain, fail.";
+
+async function judgeWithOpenAI(input: VisionInput): Promise<VisionVerdict> {
+  const mediaType = MEDIA[extname(input.imagePath).toLowerCase()] ?? "image/jpeg";
+  const dataUrl = `data:${mediaType};base64,${readFileSync(input.imagePath).toString("base64")}`;
+  const model = process.env.OPENAI_VISION_MODEL ?? "gpt-4o";
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 500,
+      messages: [
+        { role: "system", content: VERIFIER_SYSTEM },
+        {
+          role: "user",
+          content: [
+            { type: "image_url", image_url: { url: dataUrl, detail: "high" } },
+            {
+              type: "text",
+              text:
+                `Item under inspection: ${input.itemName}\n` +
+                `Expected: ${input.itemDescription}\n` +
+                `Liveness instruction the tenant was given: "${input.nonceInstruction}"\n\n` +
+                `Assess condition and nonce compliance.`,
+            },
+          ],
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "verdict", strict: true, schema: VERDICT_SCHEMA },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = (await res.text()).slice(0, 300);
+    // A broken verifier must never release funds — fail closed, loudly.
+    console.error(`[vision] OpenAI error ${res.status}: ${errText}`);
+    return { pass: false, conditionOk: false, nonceOk: false, reason: `verifier error (${res.status})`, brain: "openai" };
+  }
+  const j: any = await res.json();
+  const parsed = JSON.parse(j.choices?.[0]?.message?.content ?? "{}");
+  const pass = Boolean(parsed.conditionOk && parsed.nonceOk);
+  return {
+    pass,
+    conditionOk: !!parsed.conditionOk,
+    nonceOk: !!parsed.nonceOk,
+    reason: String(parsed.reason ?? ""),
+    brain: "openai",
+  };
 }
 
 async function judgeWithClaude(input: VisionInput): Promise<VisionVerdict> {
@@ -73,13 +138,7 @@ async function judgeWithClaude(input: VisionInput): Promise<VisionVerdict> {
     model: "claude-opus-4-8",
     max_tokens: 2048,
     thinking: { type: "adaptive" },
-    system:
-      "You are Aivy Inspect's evidence verifier for rental checkouts. You are adversarial by " +
-      "default: the uploader is financially motivated to hide damage and to reuse old photos. " +
-      "Only report conditionOk=true if the described item is clearly present and shows no damage. " +
-      "Only report nonceOk=true if the physical liveness instruction is unambiguously satisfied " +
-      "in THIS image. If the image looks AI-generated, edited, re-photographed from a screen, or " +
-      "the nonce is missing/ambiguous, fail the corresponding check. When uncertain, fail.",
+    system: VERIFIER_SYSTEM,
     messages: [
       {
         role: "user",
