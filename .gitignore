@@ -1,0 +1,13 @@
+# secrets — never commit keys
+.env
+.env.*
+
+# foundry build artifacts
+cache/
+out/
+
+# node
+offchain/node_modules/
+
+# relayer file-fallback receipts (regenerated per run)
+offchain/receipts/

@@ -1,0 +1,21 @@
+{
+  "name": "aivy-checkout-offchain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Off-chain signer, relayer, and 0G probe for Aivy Checkout",
+  "scripts": {
+    "probe:0g": "tsx probe-0g.ts",
+    "parity": "tsx parity-check.ts",
+    "relayer": "tsx relayer.ts",
+    "deploy": "tsx deploy.ts"
+  },
+  "dependencies": {
+    "@hashgraph/sdk": "^2.81.0",
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
