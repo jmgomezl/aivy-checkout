@@ -123,7 +123,11 @@ async function createDemoCheckout(nullifier: string) {
 
   const id = nextCheckoutId++;
   const tenant = Wallet.createRandom().address; // demo payout target
-  const deposit = parseEther("2");
+  // HEDERA GOTCHA: inside Hedera's EVM, msg.value is in tinybar (8 decimals),
+  // while the JSON-RPC relay takes tx value in 18-decimal weibar. So the
+  // stored deposit must be tinybar-scaled on Hedera or the == check reverts.
+  const isHedera = network.startsWith("hedera");
+  const deposit = isHedera ? 2n * 10n ** 8n : parseEther("2");
   // use CHAIN time, not wall time — dev chains (anvil) drift via evm_increaseTime
   const chainNow = (await provider.getBlock("latest"))!.timestamp;
   const deadline = chainNow + 30 * 60;
@@ -133,7 +137,9 @@ async function createDemoCheckout(nullifier: string) {
     await (await escrow.getFunction("commitNonce")(id, itemIdOf(it.name), keccak256(toUtf8Bytes(it.nonce)))).wait();
   }
   // demo: relayer funds the deposit on the tenant's behalf via direct call
-  await (await escrow.getFunction("deposit")(id, { value: deposit })).wait();
+  // (tx value always 18-dec through the RPC layer; Hedera relay converts)
+  const txValue = isHedera ? parseEther("2") : deposit;
+  await (await escrow.getFunction("deposit")(id, { value: txValue })).wait();
 
   humanToCheckout.set(nullifier, id);
   checkoutMeta.set(id, { items: ITEMS, tenant });
@@ -157,6 +163,7 @@ async function describeCheckout(id: number) {
     escrow: await escrow.getAddress(),
     tenant: meta?.tenant ?? c.tenant,
     deposit: c.deposit.toString(),
+    depositHbar: Number(c.deposit) / (network.startsWith("hedera") ? 1e8 : 1e18),
     deadline: Number(c.deadline),
     status: ["None", "Created", "Funded", "Released", "Resolved"][Number(c.status)],
     network,

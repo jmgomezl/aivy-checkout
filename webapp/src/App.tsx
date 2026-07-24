@@ -14,6 +14,7 @@ type Checkout = {
   escrow: string;
   tenant: string;
   deposit: string;
+  depositHbar: number;
   status: string;
   network: string;
   hcsTopic: string | null;
@@ -123,7 +124,7 @@ function Receipt({
           <div className="receipt-title">
             ✅ CHECKOUT COMPLETE
             <span className="receipt-sub">
-              Deposit of {(Number(checkout.deposit) / 1e18).toFixed(0)} ℏ released
+              Deposit of {checkout.depositHbar.toFixed(0)} ℏ released
             </span>
           </div>
           <div className="receipt-time">{when}</div>
@@ -314,7 +315,7 @@ export default function App() {
           <section className={`card status ${released ? "ok" : ""}`}>
             <div>
               <b>Checkout #{checkout.checkoutId}</b> · deposit{" "}
-              {(Number(checkout.deposit) / 1e18).toFixed(0)} ℏ · {passedCount}/{checkout.items.length}{" "}
+              {checkout.depositHbar.toFixed(0)} ℏ · {passedCount}/{checkout.items.length}{" "}
               items
             </div>
             <div className={`pill ${released ? "ok" : ""}`}>{checkout.status}</div>
