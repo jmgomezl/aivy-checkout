@@ -216,6 +216,11 @@ Unset `WORLD_APP_ID` and the app runs in simulator mode; unset the 0G or vision 
 and each falls back loudly rather than silently. The contract flow is identical either
 way.
 
+## Team
+
+**Juan Manuel Gomez** — Telegram [@jmgomezl](https://t.me/jmgomezl) · GitHub
+[@jmgomezl](https://github.com/jmgomezl)
+
 ## Toolchain
 
 Foundry (`forge`), Node 20+, npm. Deploy target: Hedera testnet EVM via a JSON-RPC
