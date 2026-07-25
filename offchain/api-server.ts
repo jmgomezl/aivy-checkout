@@ -45,11 +45,61 @@ const RELAYER_PK =
   // anvil pk[1] — DEV ONLY; a real deployment must set RELAYER_PRIVATE_KEY
   "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 
-const ITEMS = [
-  { name: "espresso_machine", desc: "espresso machine on the kitchen counter, undamaged", nonce: "place a blue pen next to the espresso machine" },
-  { name: "tv", desc: "living room TV with intact screen", nonce: "hold two fingers in front of the tv screen" },
-  { name: "bedroom_door", desc: "bedroom door with no holes or dents", nonce: "press an open palm flat on the bedroom door" },
+type TemplateItem = { name: string; desc: string; nonce: string };
+type Template = { id: string; title: string; payer: string; blurb: string; icon: string; items: TemplateItem[] };
+
+// The platform: one escrow + evidence + AI-verdict engine, many inspection
+// templates. Anything physical that two parties dispute at a handover.
+const TEMPLATES: Template[] = [
+  {
+    id: "rental_checkout",
+    title: "Rental Checkout",
+    payer: "hosts & property managers",
+    blurb: "Tenant proves the place is fine; deposit releases itself.",
+    icon: "🏠",
+    items: [
+      { name: "espresso_machine", desc: "espresso machine on the kitchen counter, undamaged", nonce: "place a blue pen next to the espresso machine" },
+      { name: "tv", desc: "living room TV with intact screen", nonce: "hold two fingers in front of the tv screen" },
+      { name: "bedroom_door", desc: "bedroom door with no holes or dents", nonce: "press an open palm flat on the bedroom door" },
+    ],
+  },
+  {
+    id: "vehicle_return",
+    title: "Vehicle Return",
+    payer: "rental fleets & insurers",
+    blurb: "Bumper-to-bumper condition receipt before the keys change hands.",
+    icon: "🚗",
+    items: [
+      { name: "front_bumper", desc: "front bumper and hood, no dents or scratches", nonce: "hold your open palm on the hood while shooting the bumper" },
+      { name: "driver_side", desc: "driver-side panels and mirror intact", nonce: "point at the side mirror with one finger" },
+      { name: "dashboard", desc: "dashboard showing fuel level and odometer, no warning lights", nonce: "hold two fingers beside the odometer" },
+    ],
+  },
+  {
+    id: "delivery_handover",
+    title: "Delivery Handover",
+    payer: "merchants & 3PLs",
+    blurb: "Courier proves the parcel arrived intact, at the right door.",
+    icon: "📦",
+    items: [
+      { name: "parcel_intact", desc: "sealed parcel with no crush damage or tears", nonce: "place the parcel next to the door number plate" },
+      { name: "label_visible", desc: "shipping label readable in frame", nonce: "point at the label with one finger" },
+    ],
+  },
+  {
+    id: "shelf_audit",
+    title: "Retail Shelf Audit",
+    payer: "CPG brands & distributors",
+    blurb: "Merchandiser proves the product is on-shelf, priced, and faced.",
+    icon: "🛒",
+    items: [
+      { name: "product_facing", desc: "product visible and front-facing on the shelf", nonce: "hold one finger under the leftmost product" },
+      { name: "price_tag", desc: "shelf price tag present and readable", nonce: "point at the price tag" },
+      { name: "shelf_context", desc: "wide shot showing the full shelf section", nonce: "include the aisle sign in the frame" },
+    ],
+  },
 ];
+const templateById = (id: string) => TEMPLATES.find((t) => t.id === id);
 
 const provider = new JsonRpcProvider(RPC, undefined, { cacheTimeout: -1 });
 const relayerWallet = new Wallet(RELAYER_PK, provider);
@@ -63,7 +113,7 @@ let nextCheckoutId = Math.floor(Date.now() / 1000) % 1_000_000; // unique-ish pe
 const humanToCheckout = new Map<string, number>();
 // nullifiers that passed a REAL World ID proof this boot (live mode only)
 const verifiedNullifiers = new Set<string>();
-const checkoutMeta = new Map<number, { items: typeof ITEMS; tenant: string }>();
+const checkoutMeta = new Map<number, { items: TemplateItem[]; tenant: string; template: string; icon: string }>();
 const evidenceLog = new Map<number, Array<Record<string, unknown>>>();
 
 const ARTIFACT = JSON.parse(
@@ -144,12 +194,30 @@ async function resolvePayout(tenantAddress?: string): Promise<string> {
   return addr;
 }
 
-async function createDemoCheckout(nullifier: string, tenantAddress?: string) {
+function sanitizeCustomItems(raw: any): TemplateItem[] {
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 8) throw new Error("1-8 items required");
+  return raw.map((r: any, i: number) => {
+    const name = String(r?.name ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+    const desc = String(r?.desc ?? "").trim().slice(0, 160);
+    const nonce = String(r?.nonce ?? "").trim().slice(0, 160);
+    if (!name || !desc || !nonce) throw new Error(`item ${i + 1}: name, description and liveness challenge are all required`);
+    return { name, desc, nonce };
+  });
+}
+
+async function createDemoCheckout(nullifier: string, tenantAddress?: string, templateId?: string, customItems?: any) {
   // one human, one live checkout — the World ID nullifier is the sybil key
+  const tpl = customItems ? null : (templateById(templateId ?? "rental_checkout") ?? TEMPLATES[0]);
+  const items = customItems ? sanitizeCustomItems(customItems) : tpl!.items;
+  const names = new Set(items.map((i) => i.name));
+  if (names.size !== items.length) throw new Error("duplicate item names");
+
   const existing = humanToCheckout.get(nullifier);
   if (existing && checkoutMeta.has(existing)) {
+    const meta0 = checkoutMeta.get(existing)!;
     const c = await escrow.getFunction("getCheckout")(existing);
-    if (c.status === 2n) return describeCheckout(existing); // still in progress
+    // resume only if same template still in progress; else start fresh
+    if (c.status === 2n && meta0.template === (tpl ? tpl.title : "Custom Inspection")) return describeCheckout(existing);
   }
 
   const id = nextCheckoutId++;
@@ -163,8 +231,8 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string) {
   const chainNow = (await provider.getBlock("latest"))!.timestamp;
   const deadline = chainNow + 30 * 60;
 
-  await (await escrow.getFunction("createCheckout")(id, tenant, deposit, deadline, ITEMS.map((i) => itemIdOf(i.name)))).wait();
-  for (const it of ITEMS) {
+  await (await escrow.getFunction("createCheckout")(id, tenant, deposit, deadline, items.map((i) => itemIdOf(i.name)))).wait();
+  for (const it of items) {
     await (await escrow.getFunction("commitNonce")(id, itemIdOf(it.name), keccak256(toUtf8Bytes(it.nonce)))).wait();
   }
   // demo: relayer funds the deposit on the tenant's behalf via direct call
@@ -173,7 +241,7 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string) {
   await (await escrow.getFunction("deposit")(id, { value: txValue })).wait();
 
   humanToCheckout.set(nullifier, id);
-  checkoutMeta.set(id, { items: ITEMS, tenant });
+  checkoutMeta.set(id, { items, tenant, template: tpl ? tpl.title : "Custom Inspection", icon: tpl ? tpl.icon : "🛠" });
   console.log(`[api] checkout ${id} created for human ${nullifier.slice(0, 12)}… tenant=${tenant}`);
   return describeCheckout(id);
 }
@@ -182,7 +250,7 @@ async function describeCheckout(id: number) {
   const meta = checkoutMeta.get(id);
   const c = await escrow.getFunction("getCheckout")(id);
   const items = await Promise.all(
-    (meta?.items ?? ITEMS).map(async (it) => ({
+    (meta?.items ?? []).map(async (it) => ({
       name: it.name,
       description: it.desc,
       nonceInstruction: it.nonce,
@@ -197,6 +265,8 @@ async function describeCheckout(id: number) {
     depositHbar: Number(c.deposit) / (network.startsWith("hedera") ? 1e8 : 1e18),
     deadline: Number(c.deadline),
     status: ["None", "Created", "Funded", "Released", "Resolved"][Number(c.status)],
+    template: meta?.template ?? "Inspection",
+    templateIcon: meta?.icon ?? "▣",
     network,
     hcsTopic: process.env.HCS_TOPIC_ID ?? null,
     items,
@@ -364,11 +434,19 @@ const server = createServer(async (req, res) => {
       const out = await verifyHuman(await readBody(req));
       return json(res, out.ok ? 200 : 400, out);
     }
+    if (path === "/api/templates" && req.method === "GET") {
+      return json(res, 200, { templates: TEMPLATES.map(({ id, title, payer, blurb, icon, items }) => ({ id, title, payer, blurb, icon, itemCount: items.length })) });
+    }
     if (path === "/api/demo/checkout" && req.method === "POST") {
       const body = await readBody(req);
       const human = await verifyHuman(body);
       if (!human.ok) return json(res, 401, { error: "personhood verification failed" });
-      return json(res, 200, await createDemoCheckout(human.nullifier, body.tenantAddress ? String(body.tenantAddress) : undefined));
+      return json(res, 200, await createDemoCheckout(
+        human.nullifier,
+        body.tenantAddress ? String(body.tenantAddress) : undefined,
+        body.templateId ? String(body.templateId) : undefined,
+        body.customItems
+      ));
     }
     const mGet = /^\/api\/checkout\/(\d+)$/.exec(path);
     if (mGet && req.method === "GET") {

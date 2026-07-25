@@ -423,3 +423,47 @@ body {
 @media (max-width: 380px) {
   .casebar-right { width: 100%; justify-content: space-between; }
 }
+
+/* ════════ platform hub ════════ */
+.hub-title { font-family: var(--display); font-weight: 800; font-size: clamp(20px, 5.6vw, 27px); line-height: 1.14; margin: 14px 0 8px; }
+.hub-copy { margin-bottom: 14px; }
+.hub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.usecase {
+  position: relative; text-align: left;
+  display: flex; flex-direction: column; gap: 6px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line); border-radius: 4px;
+  padding: 16px 14px 13px;
+  color: var(--fg); cursor: pointer;
+  transition: border-color .2s, transform .15s, box-shadow .2s;
+}
+.usecase:hover { border-color: var(--lime); transform: translateY(-2px); box-shadow: 0 10px 30px -14px var(--lime); }
+.usecase.custom { border-style: dashed; }
+.flag {
+  position: absolute; top: -1px; right: -1px;
+  font-size: 8px; letter-spacing: .14em;
+  background: var(--lime); color: var(--ink);
+  padding: 3px 7px; border-radius: 0 4px 0 4px;
+  font-weight: 700;
+}
+.usecase-icon { font-size: 24px; }
+.usecase-title { font-family: var(--display); font-weight: 600; font-size: 11.5px; letter-spacing: .08em; }
+.usecase-blurb { font-size: 11px; color: var(--dim); line-height: 1.45; }
+.usecase-meta { font-size: 8.5px; letter-spacing: .12em; color: #45536a; margin-top: auto; padding-top: 6px; }
+.backlink { background: none; border: 0; color: var(--dim); font: 600 10px var(--display); letter-spacing: .14em; cursor: pointer; padding: 0 0 12px; display: block; }
+.backlink:hover { color: var(--lime); }
+
+/* builder */
+.draft { border: 1px dashed var(--line-hot); border-radius: 4px; padding: 12px; margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.draft-head { display: flex; justify-content: space-between; align-items: center; }
+.draft-head .fine { margin: 0; color: var(--lime); }
+.draft-x { background: none; border: 0; color: var(--dim); cursor: pointer; font-size: 12px; }
+.draft-x:hover { color: var(--red); }
+.draft-add {
+  margin-top: 10px; width: 100%;
+  background: none; border: 1px dashed var(--line-hot); border-radius: 4px;
+  color: var(--dim); font: 600 10.5px var(--display); letter-spacing: .12em;
+  padding: 11px; cursor: pointer;
+}
+.draft-add:hover { color: var(--lime); border-color: var(--lime); }
+@media (max-width: 380px) { .hub-grid { grid-template-columns: 1fr; } }

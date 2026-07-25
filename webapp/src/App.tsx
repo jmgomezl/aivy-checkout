@@ -17,6 +17,8 @@ type Checkout = {
   deposit: string;
   depositHbar: number;
   status: string;
+  template: string;
+  templateIcon: string;
   network: string;
   hcsTopic: string | null;
   items: Item[];
@@ -72,7 +74,14 @@ function fileToDataUrl(f: File): Promise<string> {
   });
 }
 
-const ITEM_ICON: Record<string, string> = { espresso_machine: "☕", tv: "📺", bedroom_door: "🚪" };
+const ITEM_ICON: Record<string, string> = {
+  espresso_machine: "☕", tv: "📺", bedroom_door: "🚪",
+  front_bumper: "🚗", driver_side: "🪞", dashboard: "🎛",
+  parcel_intact: "📦", label_visible: "🏷", product_facing: "🛒",
+  price_tag: "💶", shelf_context: "🗄",
+};
+type TemplateCard = { id: string; title: string; payer: string; blurb: string; icon: string; itemCount: number };
+type DraftItem = { name: string; desc: string; nonce: string };
 const PIPELINE = ["UPLOADING EVIDENCE", "HASHING → 0G STORAGE", "AI VISION ANALYZING", "SIGNING VERDICT", "SETTLING ON-CHAIN"];
 
 /** Rotating pipeline status while an item is being verified. */
@@ -154,8 +163,8 @@ function Receipt({
           <div className="perf perf-top" />
 
           <header className="paper-head">
-            <div className="paper-brand">AIVY&nbsp;CHECKOUT</div>
-            <div className="paper-sub">CRYPTOGRAPHIC CHECKOUT RECEIPT · Nº {checkout.checkoutId}</div>
+            <div className="paper-brand">AIVY&nbsp;INSPECT</div>
+            <div className="paper-sub">{checkout.template.toUpperCase()} · CRYPTOGRAPHIC RECEIPT · Nº {checkout.checkoutId}</div>
             <div className="paper-time">{when}</div>
             <div className="stamp">RELEASED · {checkout.depositHbar.toFixed(0)} ℏ</div>
           </header>
@@ -226,12 +235,17 @@ export default function App() {
   const [payout, setPayout] = useState<string>(() => localStorage.getItem("aivy:payout") ?? "");
   const [error, setError] = useState<string>("");
   const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string } | null>(null);
+  const [templates, setTemplates] = useState<TemplateCard[]>([]);
+  const [picked, setPicked] = useState<TemplateCard | null>(null);
+  const [building, setBuilding] = useState(false);
+  const [draft, setDraft] = useState<DraftItem[]>([{ name: "", desc: "", nonce: "" }]);
   const starting = useRef(false);
 
   useEffect(() => {
     tg?.ready?.();
     tg?.expand?.();
     api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string }>("/api/health").then(setHealth).catch(() => {});
+    api<{ templates: TemplateCard[] }>("/api/templates").then((t) => setTemplates(t.templates)).catch(() => {});
   }, []);
 
   const verify = useCallback(async () => {
@@ -265,13 +279,16 @@ export default function App() {
     try {
       const addr = payout.trim();
       if (addr) localStorage.setItem("aivy:payout", addr);
-      setCheckout(await api<Checkout>("/api/demo/checkout", { nullifier, tenantAddress: addr || undefined }));
+      const payload: any = { nullifier, tenantAddress: addr || undefined };
+      if (building) payload.customItems = draft;
+      else if (picked) payload.templateId = picked.id;
+      setCheckout(await api<Checkout>("/api/demo/checkout", payload));
     } catch (e: any) {
       setError(e.message);
     } finally {
       starting.current = false;
     }
-  }, [nullifier, payout]);
+  }, [nullifier, payout, picked, building, draft]);
 
   const submit = useCallback(
     async (item: Item, file: File) => {
@@ -317,9 +334,9 @@ export default function App() {
             <span className="mast-net">{health?.network === "hedera-testnet" ? "HEDERA·TESTNET" : health?.network === "hedera-mainnet" ? "HEDERA" : "LOCAL·CHAIN"}</span>
           </div>
           <h1 className="mast-brand">
-            AIVY<span className="brand-slash">/</span>CHECKOUT
+            AIVY<span className="brand-slash">/</span>INSPECT
           </h1>
-          <div className="mast-tag">AI verifies the evidence · the chain moves the money · you keep the receipt</div>
+          <div className="mast-tag">verifiable inspection receipts for the physical world — AI judges the evidence, the chain moves the money</div>
         </header>
 
         {/* ─── GATE: personhood ─────────────────────────────────────── */}
@@ -353,14 +370,77 @@ export default function App() {
           </section>
         )}
 
-        {/* ─── BRIEFING: start checkout ─────────────────────────────── */}
-        {verified && !checkout && (
-          <section className="panel reveal d1">
+        {/* ─── HUB: pick a use case ─────────────────────────────────── */}
+        {verified && !checkout && !picked && !building && (
+          <section className="reveal d1">
             <div className="verified-chip">✓ HUMAN VERIFIED · {nullifier.slice(0, 14)}…</div>
+            <h2 className="hub-title">PROOF FOR ANYTHING<br />YOU CAN PHOTOGRAPH.</h2>
+            <p className="panel-copy hub-copy">
+              One engine — escrow, liveness challenges, AI verdicts, sealed receipts. Pick an
+              inspection, or design your own.
+            </p>
+            <div className="hub-grid">
+              {templates.map((t, i) => (
+                <button key={t.id} className={`usecase reveal d${(i % 3) + 1}`} onClick={() => setPicked(t)}>
+                  {t.id === "rental_checkout" && <span className="flag">FLAGSHIP DEMO</span>}
+                  <span className="usecase-icon">{t.icon}</span>
+                  <span className="usecase-title">{t.title.toUpperCase()}</span>
+                  <span className="usecase-blurb">{t.blurb}</span>
+                  <span className="usecase-meta">{t.itemCount} CHECKS · PAYS: {t.payer.toUpperCase()}</span>
+                </button>
+              ))}
+              <button className="usecase custom reveal d3" onClick={() => setBuilding(true)}>
+                <span className="usecase-icon">＋</span>
+                <span className="usecase-title">BUILD YOUR OWN</span>
+                <span className="usecase-blurb">Define the checklist. The engine does the rest.</span>
+                <span className="usecase-meta">ANY INDUSTRY · ANY HANDOVER</span>
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* ─── BUILDER: custom inspection ───────────────────────────── */}
+        {verified && !checkout && building && (
+          <section className="panel reveal">
+            <button className="backlink" onClick={() => setBuilding(false)}>← ALL USE CASES</button>
+            <h2 className="panel-title">DESIGN YOUR<br />INSPECTION.</h2>
+            <p className="panel-copy">Each check needs a name, what the AI should verify, and a physical liveness challenge.</p>
+            {draft.map((d, i) => (
+              <div className="draft" key={i}>
+                <div className="draft-head">
+                  <span className="fine">CHECK {String(i + 1).padStart(2, "0")}</span>
+                  {draft.length > 1 && (
+                    <button className="draft-x" onClick={() => setDraft(draft.filter((_, j) => j !== i))}>✕</button>
+                  )}
+                </div>
+                <input className="addr" placeholder="item name — e.g. booth banner" value={d.name}
+                  onChange={(e) => setDraft(draft.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                <input className="addr" placeholder="what the AI verifies — e.g. sponsor banner hung, undamaged" value={d.desc}
+                  onChange={(e) => setDraft(draft.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x)))} />
+                <input className="addr" placeholder="liveness challenge — e.g. hold two fingers next to the logo" value={d.nonce}
+                  onChange={(e) => setDraft(draft.map((x, j) => (j === i ? { ...x, nonce: e.target.value } : x)))} />
+              </div>
+            ))}
+            {draft.length < 8 && (
+              <button className="draft-add" onClick={() => setDraft([...draft, { name: "", desc: "", nonce: "" }])}>+ ADD CHECK</button>
+            )}
+            <div className="payout">
+              <label className="fine" htmlFor="payout2">PAYOUT WALLET (OPTIONAL)</label>
+              <input id="payout2" className="addr" placeholder="0x…" value={payout} onChange={(e) => setPayout(e.target.value)} spellCheck={false} />
+            </div>
+            <button className="cta" onClick={start}>ESCROW &amp; BEGIN</button>
+          </section>
+        )}
+
+        {/* ─── BRIEFING: chosen template ────────────────────────────── */}
+        {verified && !checkout && picked && !building && (
+          <section className="panel reveal d1">
+            <button className="backlink" onClick={() => setPicked(null)}>← ALL USE CASES</button>
+            <div className="verified-chip">{picked.icon} {picked.title.toUpperCase()} · {picked.itemCount} CHECKS</div>
             <h2 className="panel-title">YOUR DEPOSIT IS<br />IN ESCROW.</h2>
             <p className="panel-copy">
-              The host locked it in a Hedera smart contract. Pass every checklist item and the
-              contract pays you back <em>the second</em> the last verdict lands. No host mood. No 30-day wait.
+              Locked in a Hedera smart contract. Pass every check and the
+              contract pays out <em>the second</em> the last verdict lands. No counterparty mood. No 30-day wait.
             </p>
             <div className="payout">
               <label className="fine" htmlFor="payout">PAYOUT WALLET — YOUR OCULUSVAULT ADDRESS (OPTIONAL)</label>
@@ -386,7 +466,7 @@ export default function App() {
           <>
             <section className={`casebar reveal ${released ? "done" : ""}`}>
               <div className="casebar-left">
-                <span className="case-no">CASE Nº {checkout.checkoutId}</span>
+                <span className="case-no">{checkout.templateIcon} {checkout.template.toUpperCase()} · CASE Nº {checkout.checkoutId}</span>
                 <span className="case-amt">{checkout.depositHbar.toFixed(0)} ℏ IN ESCROW</span>
               </div>
               <div className="casebar-right">
