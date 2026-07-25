@@ -234,7 +234,7 @@ function Receipt({
           <div className="perf perf-top" />
 
           <header className="paper-head">
-            <div className="paper-brand">AIVY&nbsp;INSPECT</div>
+            <div className="paper-brand">AIVY&nbsp;CHECKOUT</div>
             <div className="paper-sub">{checkout.template.toUpperCase()} · CRYPTOGRAPHIC RECEIPT · Nº {checkout.checkoutId}</div>
             <div className="paper-time">{when}</div>
             <div className="stamp">RELEASED · {checkout.depositHbar.toFixed(0)} ℏ</div>
@@ -410,7 +410,7 @@ export default function App() {
             <span className="mast-net">{health?.network === "hedera-testnet" ? "HEDERA·TESTNET" : health?.network === "hedera-mainnet" ? "HEDERA" : "LOCAL·CHAIN"}</span>
           </div>
           <h1 className="mast-brand">
-            AIVY<span className="brand-slash">/</span>INSPECT
+            AIVY<span className="brand-slash">/</span>CHECKOUT
           </h1>
           <div className="mast-tag">verifiable inspection receipts for the physical world — AI judges the evidence, the chain moves the money</div>
         </header>
