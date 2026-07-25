@@ -185,7 +185,7 @@ function recordTier(nullifier: string, level: string | undefined) {
 const verifiedNullifiers = new Set<string>();
 const checkoutMeta = new Map<
   number,
-  { items: TemplateItem[]; tenant: string; template: string; icon: string; geoLock: boolean; timeLockMinutes: number; noncesReady?: Promise<void> }
+  { items: TemplateItem[]; tenant: string; template: string; icon: string; geoLock: boolean; timeLockMinutes: number; brain?: "0g-compute" | "openai"; noncesReady?: Promise<void> }
 >();
 const evidenceLog = new Map<number, Array<Record<string, unknown>>>();
 
@@ -292,7 +292,7 @@ function sanitizeCustomItems(raw: any): TemplateItem[] {
   });
 }
 
-async function createDemoCheckout(nullifier: string, tenantAddress?: string, templateId?: string, customItems?: any, fresh = false, geoLock = false, timeLockMinutes = 30) {
+async function createDemoCheckout(nullifier: string, tenantAddress?: string, templateId?: string, customItems?: any, fresh = false, geoLock = false, timeLockMinutes = 30, brain?: "0g-compute" | "openai") {
   // one human, one live checkout — the World ID nullifier is the sybil key
   const tpl = customItems ? null : (templateById(templateId ?? "rental_checkout") ?? TEMPLATES[0]);
   const items = customItems ? sanitizeCustomItems(customItems) : tpl!.items;
@@ -358,7 +358,7 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   noncesReady.catch((e) => console.error(`[api] checkout ${id} nonce commit failed —`, e?.message ?? e));
 
   humanToCheckout.set(nullifier, id);
-  checkoutMeta.set(id, { items, tenant, template: tpl ? tpl.title : "Custom Inspection", icon: tpl ? tpl.icon : "🛠", geoLock, timeLockMinutes: windowMin, noncesReady });
+  checkoutMeta.set(id, { items, tenant, template: tpl ? tpl.title : "Custom Inspection", icon: tpl ? tpl.icon : "🛠", geoLock, timeLockMinutes: windowMin, brain, noncesReady });
   console.log(`[api] checkout ${id} created for human ${nullifier.slice(0, 12)}… tenant=${tenant}`);
   return describeCheckout(id);
 }
@@ -451,6 +451,7 @@ async function describeCheckout(id: number) {
     templateIcon: meta?.icon ?? "▣",
     geoLock: meta?.geoLock ?? false,
     timeLockMinutes: meta?.timeLockMinutes ?? 30,
+    verifierBrain: meta?.brain ?? (process.env.ZEROG_COMPUTE === "1" ? "0g-compute" : "openai"),
     network,
     hcsTopic: process.env.HCS_TOPIC_ID ?? null,
     items,
@@ -498,7 +499,7 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
     itemDescription: item.desc,
     nonceInstruction: item.nonce,
     imagePath,
-  });
+  }, meta.brain);
 
   const v: ItemVerdict = {
     checkoutId: BigInt(id),
@@ -640,7 +641,7 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === "OPTIONS") return json(res, 204, {});
     if (path === "/api/health") {
-      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, network, hcsTopic: process.env.HCS_TOPIC_ID ?? null, worldId: process.env.WORLD_APP_ID ? "live" : "simulator", worldAppId: process.env.WORLD_APP_ID ?? null, worldAction: process.env.WORLD_ACTION ?? "aivy-checkout", selfieEnabled: SELFIE_ENABLED, worldRpId: process.env.WORLD_RP_ID ?? null });
+      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, network, hcsTopic: process.env.HCS_TOPIC_ID ?? null, worldId: process.env.WORLD_APP_ID ? "live" : "simulator", worldAppId: process.env.WORLD_APP_ID ?? null, worldAction: process.env.WORLD_ACTION ?? "aivy-checkout", selfieEnabled: SELFIE_ENABLED, worldRpId: process.env.WORLD_RP_ID ?? null, computeEnabled: process.env.ZEROG_COMPUTE === "1" });
     }
     // ── World ID 4.0 (Selfie Check beta) — active when WORLD_RP_ID is set ──
     if (path === "/api/world/rp-signature" && req.method === "POST") {
@@ -719,7 +720,8 @@ const server = createServer(async (req, res) => {
         body.customItems,
         Boolean(body.fresh),
         Boolean(body.geoLock),
-        Number(body.timeLockMinutes) || 30
+        Number(body.timeLockMinutes) || 30,
+        body.brain === "openai" || body.brain === "0g-compute" ? body.brain : undefined
       ));
     }
     const mGet = /^\/api\/checkout\/(\d+)$/.exec(path);

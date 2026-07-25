@@ -67,12 +67,16 @@ const MEDIA: Record<string, string> = {
   ".gif": "image/gif",
 };
 
-export async function judge(input: VisionInput): Promise<VisionVerdict> {
+/** prefer: per-checkout verifier choice — "0g-compute" (TEE) or "openai"
+ *  (frontier fallback brain). Unset = env default. GPT remains the safety
+ *  net either way; a broken provider can never stall a settlement. */
+export async function judge(input: VisionInput, prefer?: "0g-compute" | "openai"): Promise<VisionVerdict> {
   // 0G Compute first when enabled: a verdict signed inside a TEE is the one
   // worth putting on the receipt. It returns null rather than throwing when the
   // network, ledger or provider is unavailable, so the brains below stay the
   // safety net — a settlement demo must not die with an inference provider.
-  if (process.env.ZEROG_COMPUTE === "1") {
+  const wantTee = prefer ? prefer === "0g-compute" : process.env.ZEROG_COMPUTE === "1";
+  if (wantTee && process.env.ZEROG_COMPUTE === "1") {
     const { judgeOn0gCompute } = await import("./compute-0g.js");
     const mediaType = MEDIA[extname(input.imagePath).toLowerCase()] ?? "image/jpeg";
     const sealed = await judgeOn0gCompute(input, readFileSync(input.imagePath).toString("base64"), mediaType);

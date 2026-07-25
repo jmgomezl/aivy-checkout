@@ -392,13 +392,14 @@ export default function App() {
   const [releasedAt, setReleasedAt] = useState<Date | null>(null);
   const [payout, setPayout] = useState<string>(() => localStorage.getItem("aivy:payout") ?? "");
   const [error, setError] = useState<string>("");
-  const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null; worldRpId?: string | null } | null>(null);
+  const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null; worldRpId?: string | null; computeEnabled?: boolean } | null>(null);
   const [templates, setTemplates] = useState<TemplateCard[]>([]);
   const [archive, setArchive] = useState<Archived[]>([]);
   const [picked, setPicked] = useState<TemplateCard | null>(null);
   const [building, setBuilding] = useState(false);
   const [draft, setDraft] = useState<DraftItem[]>([{ name: "", desc: "", nonce: "" }]);
   const [geoLock, setGeoLock] = useState(false);
+  const [brain, setBrain] = useState<"0g-compute" | "openai">("0g-compute");
   const [tier, setTier] = useState<"device" | "selfie" | "orb">("device");
   const [capHbar, setCapHbar] = useState(2);
   const [selfieEnabled, setSelfieEnabled] = useState(false);
@@ -415,7 +416,7 @@ export default function App() {
     // the viewer's own theme and a light-mode judge gets a white header band
     tg?.setHeaderColor?.("#07090d");
     tg?.setBackgroundColor?.("#07090d");
-    api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null; worldRpId?: string | null }>("/api/health").then(setHealth).catch(() => {});
+    api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null; worldRpId?: string | null; computeEnabled?: boolean }>("/api/health").then(setHealth).catch(() => {});
     api<{ templates: TemplateCard[] }>("/api/templates").then((t) => setTemplates(t.templates)).catch(() => {});
     loadArchive();
   }, []);
@@ -535,7 +536,7 @@ export default function App() {
     try {
       const addr = payout.trim();
       if (addr) localStorage.setItem("aivy:payout", addr);
-      const payload: any = { nullifier, tenantAddress: addr || undefined, geoLock, timeLockMinutes: timeLock || 30 };
+      const payload: any = { nullifier, tenantAddress: addr || undefined, geoLock, timeLockMinutes: timeLock || 30, brain: health?.computeEnabled ? brain : "openai" };
       if (wantFresh.current) {
         payload.fresh = true;
         wantFresh.current = false;
@@ -550,7 +551,7 @@ export default function App() {
       starting.current = false;
       setSettling(false);
     }
-  }, [nullifier, payout, picked, building, draft, geoLock, timeLock]);
+  }, [nullifier, payout, picked, building, draft, geoLock, timeLock, brain, health]);
 
   const submit = useCallback(
     async (item: Item, file: File) => {
@@ -784,6 +785,15 @@ export default function App() {
                   ))}
                 </div>
               )}
+              {health?.computeEnabled && (
+                <div className="brainsel">
+                  <span className="lock-text"><b>🧠 VERIFIER</b><i>who judges your evidence</i></span>
+                  <div className="lock-mins brain-mins">
+                    <button className={brain === "0g-compute" ? "on" : ""} onClick={() => setBrain("0g-compute")}>0G TEE · VERIFIABLE</button>
+                    <button className={brain === "openai" ? "on" : ""} onClick={() => setBrain("openai")}>GPT · FRONTIER</button>
+                  </div>
+                </div>
+              )}
             </div>
             {settling ? (
               <SettlementTicker items={draft.length} />
@@ -842,6 +852,15 @@ export default function App() {
                   {[15, 30, 60].map((m) => (
                     <button key={m} className={timeLock === m ? "on" : ""} onClick={() => setTimeLock(m)}>{m} MIN</button>
                   ))}
+                </div>
+              )}
+              {health?.computeEnabled && (
+                <div className="brainsel">
+                  <span className="lock-text"><b>🧠 VERIFIER</b><i>who judges your evidence</i></span>
+                  <div className="lock-mins brain-mins">
+                    <button className={brain === "0g-compute" ? "on" : ""} onClick={() => setBrain("0g-compute")}>0G TEE · VERIFIABLE</button>
+                    <button className={brain === "openai" ? "on" : ""} onClick={() => setBrain("openai")}>GPT · FRONTIER</button>
+                  </div>
                 </div>
               )}
             </div>
