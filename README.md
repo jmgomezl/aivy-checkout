@@ -145,8 +145,14 @@ already paid" works as a product.
 |---|---|---|
 | EVM smart contract (Solidity, Foundry) | `CheckoutEscrow` — itemized state machine, `ecrecover`-verified verdicts, unilateral auto-release, timeout resolution, registrar-gated creation | [contract](https://hashscan.io/testnet/contract/0x83B55906c6359c3f43Bf95cb8Cdef4455DB68226) · 22 forge tests |
 | **Native HBAR** value transfer | The deposit itself — no token overhead where none is needed | every `Released` tx |
-| **HCS** (Consensus Service) | The verifiable payment audit trail: full receipt JSON (items, hashes, signatures, txs) consensus-timestamped | [topic `0.0.9736741`](https://hashscan.io/testnet/topic/0.0.9736741) |
+| **HCS** (Consensus Service) | A **full lifecycle audit trail**, not just a terminal receipt: `checkout_created → nonces_committed → verdict_signed (per item) → escrow_released`, each consensus-timestamped and publicly ordered — watch the topic fill in real time during a checkout | [topic `0.0.9736741`](https://hashscan.io/testnet/topic/0.0.9736741) |
 | JS SDK (`@hashgraph/sdk`) | HCS topic creation + receipt sealing from the agent | `offchain/relayer.ts`, `api-server.ts` |
+
+**Privacy by construction on the public record:** item descriptions travel to HCS
+as keccak hashes (provably fixed at creation, never revealed — reveal the text later
+and anyone can verify it matched), and geo-lock coordinates are rounded to ~1 km
+before sealing — the receipt proves the *area and the order of events*, not your
+doorstep. Private metadata, public consensus.
 
 **The autonomous part is structural, not cosmetic:** `verifyItemAndRelease` checks the
 verdict signature *and transfers in the same call*. There is no "host approves payout"

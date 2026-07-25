@@ -357,6 +357,24 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   // keep the rejection from going unhandled; submitEvidence re-awaits and surfaces it
   noncesReady.catch((e) => console.error(`[api] checkout ${id} nonce commit failed —`, e?.message ?? e));
 
+  // lifecycle audit trail (fire-and-forget): the case is born on the public record.
+  // Descriptions travel as keccak hashes — provably fixed, never revealed.
+  void emitHcsEvent("checkout_created", {
+    checkoutId: id,
+    template: tpl ? tpl.title : "Custom Inspection",
+    escrow: await escrow.getAddress(),
+    depositHbar: depositHbarWanted,
+    geoLock,
+    timeLockMinutes: windowMin,
+    items: items.map((it) => ({ item: it.name, descHash: keccak256(toUtf8Bytes(it.desc)) })),
+  });
+  void noncesReady.then(() =>
+    emitHcsEvent("nonces_committed", {
+      checkoutId: id,
+      nonces: items.map((it) => ({ item: it.name, nonceHash: keccak256(toUtf8Bytes(it.nonce)) })),
+    })
+  ).catch(() => {});
+
   humanToCheckout.set(nullifier, id);
   checkoutMeta.set(id, { items, tenant, template: tpl ? tpl.title : "Custom Inspection", icon: tpl ? tpl.icon : "🛠", geoLock, timeLockMinutes: windowMin, brain, noncesReady });
   console.log(`[api] checkout ${id} created for human ${nullifier.slice(0, 12)}… tenant=${tenant}`);
@@ -534,6 +552,20 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
   });
   evidenceLog.set(id, log);
 
+  // per-item lifecycle event: verdict + evidence hash, consensus-ordered
+  void emitHcsEvent("verdict_signed", {
+    checkoutId: id,
+    item: item.name,
+    verdict: verdict.pass ? "PASS" : "FAIL",
+    brain: verdict.brain,
+    teeVerified: verdict.teeVerified ?? null,
+    imageHash: stored.imageHash,
+    storageRoot: stored.root ?? null,
+    descHash: keccak256(toUtf8Bytes(item.desc)),
+    geo: roundGeo(meta.geoLock && geo ? geo : null),
+    tx: receipt?.hash,
+  });
+
   const state = await describeCheckout(id);
   let hcsSeal = null;
   if (state.status === "Released") {
@@ -563,6 +595,56 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
 // ---------------------------------------------------------------------------
 // HCS sealing — the immutable receipt log (fire-and-forget on release)
 // ---------------------------------------------------------------------------
+// ── HCS lifecycle audit trail ───────────────────────────────────────
+// Every stage of a checkout emits a small consensus-ordered event to the
+// public topic: checkout_created -> nonce_committed -> verdict_signed (per
+// item) -> escrow_released. Privacy: descriptions and GPS never go raw —
+// descriptions as keccak hashes, geo rounded to ~1 km. Fail-soft: an HCS
+// hiccup logs loudly and never blocks a settlement.
+let hcsClientPromise: Promise<any> | null = null;
+async function getHcsClient() {
+  const topicId = process.env.HCS_TOPIC_ID;
+  const opId = process.env.HEDERA_OPERATOR_ID;
+  const opKey = process.env.HEDERA_OPERATOR_KEY;
+  if (!topicId || !opId || !opKey) return null;
+  if (!hcsClientPromise) {
+    hcsClientPromise = (async () => {
+      const { Client, PrivateKey } = await import("@hashgraph/sdk");
+      return Client.forTestnet().setOperator(opId, PrivateKey.fromStringECDSA(opKey));
+    })().catch((e) => { hcsClientPromise = null; throw e; });
+  }
+  return hcsClientPromise;
+}
+
+export async function emitHcsEvent(type: string, payload: Record<string, unknown>): Promise<{ topicId: string; sequence: string } | null> {
+  const topicId = process.env.HCS_TOPIC_ID;
+  try {
+    const client = await getHcsClient();
+    if (!client || !topicId) {
+      console.warn(`[hcs] ⚠️  creds not set — event ${type} NOT sealed`);
+      return null;
+    }
+    const { TopicMessageSubmitTransaction } = await import("@hashgraph/sdk");
+    const tx = await new TopicMessageSubmitTransaction({
+      topicId,
+      message: JSON.stringify({ v: 1, app: "aivy-checkout", type, ts: new Date().toISOString(), ...payload }),
+    }).execute(client);
+    const rec = await tx.getReceipt(client);
+    const seq = rec.topicSequenceNumber?.toString() ?? "";
+    console.log(`[hcs] ✅ ${type} sealed seq ${seq}`);
+    return { topicId, sequence: seq };
+  } catch (e: any) {
+    console.error(`[hcs] event ${type} failed:`, e?.message ?? e);
+    return null;
+  }
+}
+
+/** GPS rounded to 2 decimals ≈ 1.1 km — proves the area, not the doorstep. */
+function roundGeo(geo?: { lat: number; lng: number } | null) {
+  if (!geo) return undefined;
+  return { lat: Math.round(geo.lat * 100) / 100, lng: Math.round(geo.lng * 100) / 100 };
+}
+
 async function sealToHcs(checkoutId: number, releaseTx: string | undefined) {
   const topicId = process.env.HCS_TOPIC_ID;
   const opId = process.env.HEDERA_OPERATOR_ID;
