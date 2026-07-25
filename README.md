@@ -30,6 +30,18 @@ Built solo at **ETHGlobal Lisboa** · Hedera × World × 0G
 
 ---
 
+![Aivy Checkout — the personhood gate, the use cases, the escrow terms you choose, and the on-chain archive](docs/media/tour.gif)
+
+<sub>Recorded against the live site. **One human, one checkout** — World ID gates entry.
+Pick an inspection or design your own. Before the deposit locks you choose the terms:
+**geo-lock** (proves *where*), **time lock** (proves *when*), and who judges the evidence
+— **0G TEE · verifiable** or a frontier model. At the bottom: every finished case,
+replayed from the Hedera Consensus Service topic rather than read from a database.
+The capture → verdict → payout leg is step 3–5 below; it needs a physical object in
+someone's hand, so it is filmed in the demo video rather than automated here.</sub>
+
+---
+
 ## ⏱ The 90-second judge tour
 
 1. Open **https://checkout.aivylabs.xyz** → verify with World ID (real, v4)
