@@ -37,6 +37,8 @@ type EvidenceResult = {
   evidenceUri: string;
   storageRoot?: string | null;
   geo?: { lat: number; lng: number; acc?: number | null } | null;
+  teeVerified?: boolean | null;
+  computeModel?: string | null;
   signature: string;
   verifier: string;
   txHash?: string;
@@ -331,6 +333,9 @@ function Receipt({
                   <table className="paper-kv"><tbody>
                     <tr><td>{r.storageBackend === "0g" ? <>0g&nbsp;root</> : "evidence"}</td><td><Hash value={r.storageRoot ?? r.imageHash} href={cidHref} chars={16} /></td></tr>
                     <tr><td>ai&nbsp;verdict</td><td>undamaged · nonce&nbsp;detected</td></tr>
+                    <tr><td>verifier</td><td>{r.brain === "0g-compute"
+                      ? <>0G&nbsp;COMPUTE · {(r.computeModel ?? "").replace("qwen/", "")}{r.teeVerified ? <b className="ink-pass"> · TEE&nbsp;SIG&nbsp;✓</b> : " · sig unverified"}</>
+                      : r.brain === "openai" ? "GPT VISION (fallback)" : r.brain}</td></tr>
                     <tr><td>signature</td><td><Hash value={r.signature} chars={16} /></td></tr>
                     {r.txHash && <tr><td>verdict&nbsp;tx</td><td><Hash value={r.txHash} href={exp ? `${exp}/transaction/${r.txHash}` : null} chars={16} /></td></tr>}
                     {r.geo && <tr><td>geo</td><td>{r.geo.lat.toFixed(5)}, {r.geo.lng.toFixed(5)} (±{r.geo.acc ?? "?"}m)</td></tr>}
@@ -930,7 +935,7 @@ export default function App() {
 
                     {r && (
                       <div className="ev-result">
-                        <div className="ev-kv"><span>ai&nbsp;verdict</span><span className={r.verdict === "PASS" ? "ink-lime" : "ink-red"}>{r.verdict} · {r.brain}</span></div>
+                        <div className="ev-kv"><span>ai&nbsp;verdict</span><span className={r.verdict === "PASS" ? "ink-lime" : "ink-red"}>{r.verdict} · {r.brain}{r.brain === "0g-compute" && r.teeVerified ? " · TEE ✓" : ""}</span></div>
                         <div className="ev-kv"><span>reason</span><span>{r.reason}</span></div>
                         <div className="ev-kv"><span>evidence</span><span>{r.imageHash.slice(0, 18)}… · {STORAGE_LABEL[r.storageBackend] ?? r.storageBackend}</span></div>
                         {r.txHash && <div className="ev-kv"><span>tx</span><span>{r.txHash.slice(0, 18)}…</span></div>}
