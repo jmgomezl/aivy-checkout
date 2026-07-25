@@ -675,13 +675,25 @@ const server = createServer(async (req, res) => {
       const nullifier: string =
         vj.nullifier_hash ?? vj.nullifier ?? r.nullifier_hash ?? r.nullifier ??
         (Array.isArray(r.proofs) ? r.proofs[0]?.nullifier_hash : undefined) ?? "";
-      const credential: string = String(
-        vj.credential_type ?? vj.verification_level ?? r.credential_type ?? r.verification_level ?? body.credentialHint ?? "device"
-      ).toLowerCase();
+      // SECURITY: tier derives ONLY from World-verified material. vj is the
+      // verifier's response (trusted); idkitResponse identifiers are usable
+      // only BECAUSE verification of that exact payload just succeeded.
+      // The client-supplied credentialHint is deliberately ignored.
+      const identifiers: string[] = [
+        ...(Array.isArray(vj.results) ? vj.results.map((x: any) => x?.identifier) : []),
+        ...(Array.isArray(vj.responses) ? vj.responses.map((x: any) => x?.identifier) : []),
+        ...(Array.isArray(r.results) ? r.results.map((x: any) => x?.identifier) : []),
+        ...(Array.isArray(r.responses) ? r.responses.map((x: any) => x?.identifier) : []),
+        vj.credential_type, vj.verification_level, r.credential_type, r.verification_level,
+      ].filter(Boolean).map((x: any) => String(x).toLowerCase());
+      const credential =
+        identifiers.find((i) => i.includes("selfie")) ??
+        identifiers.find((i) => i.includes("orb") || i.includes("human") || i.includes("passport") || i.includes("document")) ??
+        identifiers[0] ?? "device";
       if (!nullifier) return json(res, 400, { error: "verified but no nullifier found — inspect payload", detail: vj });
       verifiedNullifiers.add(nullifier);
       // selfie_check / selfie -> selfie tier; orb / proof_of_human -> orb
-      const level = credential.includes("selfie") ? "selfie" : credential.includes("orb") || credential.includes("human") ? "orb" : "device";
+      const level = credential.includes("selfie") ? "selfie" : (credential.includes("orb") || credential.includes("human")) ? "orb" : "device";
       recordTier(nullifier, level);
       const tier = tierOf(nullifier);
       console.log(`[api] ✅ v4 verified nullifier=${nullifier.slice(0, 14)}… credential=${credential} tier=${tier}`);

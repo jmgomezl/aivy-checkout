@@ -41,10 +41,22 @@ and receipts hang off.
    fast; the v2 IDKitWidget UX (QR/deep-link) needed zero custom code;
    per-app nullifiers behaved exactly as documented.
 
+## Status update (pre-venue): World ID 4.0 is LIVE in production
+
+v4 migration completed and deployed ahead of the weekend: backend-signed
+`rp_context` (signRequest), `IDKitRequestWidget` with device/orb/selfie
+presets (`proofOfHuman` for orb-tier step-up, `selfieCheckLegacy` for the
+beta), verification via `POST /api/v4/verify/{rp_id}`, and
+`SELFIE_CHECK_ENABLED=1`. Tier derivation reads only World-verified
+credential identifiers (`results[].identifier` and equivalents) — the
+client-supplied hint is deliberately ignored for access control.
+**Remaining risk:** confirming the exact identifier strings the live v4
+verify response uses for each credential (parsed defensively until then).
+
 ## Venue TODO (fill during weekend)
 
-- [ ] Flip `SELFIE_CHECK_ENABLED=1`, integrate v4 preset (`selfieCheckLegacy`
-      or successor) on a branch; record time-to-integrate
+- [ ] Confirm live v4 verify response shape + credential identifier strings
+      (first real Selfie Check proof); tighten the defensive parser
 - [ ] Dev feedback: rp_context signing DX, sandbox behavior, error surfaces
 - [ ] User feedback: N users through selfie flow — comprehension of the tier
       step-up ("why am I being asked for a selfie?"), camera-flow friction,

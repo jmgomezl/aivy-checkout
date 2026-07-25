@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 // World ID 4.0 (branch: world-selfie-v4) — request-widget + backend-signed
 // rp_context. Selfie Check preset is the whole point of this branch.
-import { IDKitRequestWidget, deviceLegacy, orbLegacy, selfieCheckLegacy, type RpContext } from "@worldcoin/idkit";
+import { IDKitRequestWidget, deviceLegacy, proofOfHuman, selfieCheckLegacy, type RpContext } from "@worldcoin/idkit";
 
 /**
  * Aivy Checkout — tenant mini app.
@@ -456,7 +456,7 @@ export default function App() {
 
   const worldPreset =
     worldKind === "selfie" ? selfieCheckLegacy({ signal: "aivy-checkout" }) :
-    worldKind === "orb" ? orbLegacy({ signal: "aivy-checkout" }) :
+    worldKind === "orb" ? proofOfHuman({ signal: "aivy-checkout" }) :
     deviceLegacy({ signal: "aivy-checkout" });
 
   const applyWorldSession = useCallback((out: any) => {
@@ -490,10 +490,7 @@ export default function App() {
   // idkit response to /api/v4/verify/{rp_id} and returns our session (tier,
   // nullifier, cap). onSuccess then applies it via applyWorldSession.
   const handleWorldVerify = useCallback(async (result: unknown) => {
-    const out = await api<any>("/api/world/verify-v4", {
-      idkitResponse: result,
-      credentialHint: worldKind === "selfie" ? "selfie_check" : worldKind === "orb" ? "orb" : "device",
-    });
+    const out = await api<any>("/api/world/verify-v4", { idkitResponse: result });
     worldResult.current = out;
   }, [worldKind]);
 
@@ -545,7 +542,13 @@ export default function App() {
       else if (picked) payload.templateId = picked.id;
       setCheckout(await api<Checkout>("/api/demo/checkout", payload));
     } catch (e: any) {
-      if (/personhood/i.test(e.message)) dropVerification();
+      const gate = /^TIER_GATE:(selfie|orb):(.*)$/.exec(e.message ?? "");
+      if (gate) {
+        setStepUp(gate[1] as "selfie" | "orb");
+        setError(gate[2]);
+        setPicked(null); // back to the hub, where the step-up panel renders
+        setBuilding(false);
+      } else if (/personhood/i.test(e.message)) dropVerification();
       else setError(e.message);
     } finally {
       starting.current = false;
