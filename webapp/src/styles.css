@@ -651,3 +651,8 @@ body {
 .brainsel { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
 .brainsel .lock-mins { margin-left: 0; }
 .brain-mins button { flex: 1; }
+
+/* sponsor stack strip on the paper receipt */
+.stack-strip { display: flex; justify-content: center; gap: 8px; margin: 12px 0 2px; }
+.stack-strip span { flex: 1; max-width: 132px; text-align: center; border: 1px solid #b9b2a2; border-radius: 3px; padding: 6px 4px; font-size: 8.5px; font-weight: 800; letter-spacing: .08em; color: var(--paper-ink); }
+.stack-strip i { display: block; font-style: normal; font-weight: 400; font-size: 7.5px; color: var(--paper-dim); letter-spacing: .04em; margin-top: 2px; }

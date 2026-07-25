@@ -280,12 +280,16 @@ function Receipt({
   results,
   thumbs,
   releasedAt,
+  tier,
+  nullifier,
   onClose,
 }: {
   checkout: Checkout;
   results: Record<string, EvidenceResult>;
   thumbs: Record<string, string>;
   releasedAt: Date;
+  tier: "device" | "selfie" | "orb";
+  nullifier: string;
   onClose: () => void;
 }) {
   const exp = explorerBase(checkout.network);
@@ -335,7 +339,7 @@ function Receipt({
                     <tr><td>ai&nbsp;verdict</td><td>undamaged · nonce&nbsp;detected</td></tr>
                     <tr><td>verifier</td><td>{r.brain === "0g-compute"
                       ? <>0G&nbsp;COMPUTE · {(r.computeModel ?? "").replace("qwen/", "")}{r.teeVerified ? <b className="ink-pass"> · TEE&nbsp;SIG&nbsp;✓</b> : " · sig unverified"}</>
-                      : r.brain === "openai" ? "GPT VISION (fallback)" : r.brain}</td></tr>
+                      : r.brain === "openai" ? (checkout as any).verifierBrain === "0g-compute" ? "GPT VISION (fallback)" : "GPT VISION" : r.brain}</td></tr>
                     <tr><td>signature</td><td><Hash value={r.signature} chars={16} /></td></tr>
                     {r.txHash && <tr><td>verdict&nbsp;tx</td><td><Hash value={r.txHash} href={exp ? `${exp}/transaction/${r.txHash}` : null} chars={16} /></td></tr>}
                     {r.geo && <tr><td>geo</td><td>{r.geo.lat.toFixed(5)}, {r.geo.lng.toFixed(5)} (±{r.geo.acc ?? "?"}m)</td></tr>}
@@ -350,6 +354,7 @@ function Receipt({
           <section className="paper-settle">
             <div className="paper-item-head"><span>SETTLEMENT</span><span>HEDERA {checkout.network === "hedera-testnet" ? "TESTNET" : ""}</span></div>
             <table className="paper-kv wide"><tbody>
+              <tr><td>human</td><td>WORLD&nbsp;ID&nbsp;✓ · {tier === "orb" ? "ORB (proof of human)" : tier === "selfie" ? "SELFIE CHECK" : "DEVICE"} tier · <span title={nullifier}>{nullifier.slice(0, 14)}…</span></td></tr>
               <tr><td>escrow</td><td><Hash value={checkout.escrow} href={exp ? `${exp}/contract/${checkout.escrow}` : null} chars={20} /></td></tr>
               {finalTx && <tr><td>release&nbsp;tx</td><td><Hash value={finalTx} href={exp ? `${exp}/transaction/${finalTx}` : null} chars={20} /></td></tr>}
               <tr><td>paid&nbsp;to</td><td><Hash value={checkout.tenant} href={exp ? `${exp}/account/${checkout.tenant}` : null} chars={20} /></td></tr>
@@ -358,6 +363,12 @@ function Receipt({
                 : <span className="hashval">pending — set HCS_TOPIC_ID</span>}</td></tr>
             </tbody></table>
           </section>
+
+          <div className="stack-strip" aria-label="protocol stack">
+            <span>⛓ HEDERA<br/><i>escrow · HCS trail</i></span>
+            <span>🌐 WORLD<br/><i>verified human · {tier}</i></span>
+            <span>🧠 0G<br/><i>{Object.values(results).some(r => r.brain === "0g-compute") ? "storage · verified inference" : "evidence storage"}</i></span>
+          </div>
 
           <HashBarcode hash={finalTx} />
           <p className="paper-foot">
@@ -993,6 +1004,8 @@ export default function App() {
             results={results}
             thumbs={thumbs}
             releasedAt={releasedAt ?? new Date()}
+            tier={tier}
+            nullifier={nullifier}
             onClose={() => setShowReceipt(false)}
           />
         )}
