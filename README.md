@@ -83,9 +83,27 @@ Digest = `personal_sign(keccak256(abi.encode(fields)))`, matching ethers
 
 ## Sponsor integrations
 
-**Hedera** — native HBAR escrow (no HTS). The itemized state machine, the `ecrecover`
-verdict check, and the auto-release all live in `CheckoutEscrow.sol`. Receipts are
-sealed to HCS by the relayer, because the EVM cannot write HCS directly.
+**Hedera** — target prize: **AI & Agentic Payments on Hedera**, specifically
+the autonomous escrow pattern. Aivy is an AI settlement agent: it opens an HBAR
+escrow on Hedera testnet, commits liveness challenges, accepts verifier-signed
+item verdicts, and releases the payment automatically when the signed condition
+is satisfied. If evidence fails or the deadline passes, the escrow resolves to
+the host. Receipts are sealed to HCS by the relayer, because the EVM cannot
+write HCS directly.
+
+How this maps to Hedera's requirements:
+
+| Requirement | Where Aivy satisfies it |
+|---|---|
+| AI agent or system executes a financial operation on Hedera testnet | `verifyItemAndRelease` releases native HBAR when the AI/verifier-signed condition passes |
+| Uses Hedera SDKs directly | `@hashgraph/sdk` submits final receipts to HCS |
+| Working autonomous payment flow | create checkout -> deposit HBAR -> commit nonces -> submit evidence -> signed verdict -> auto-release |
+| Verifiable audit trail | every final receipt is written to HCS and replayed from the Mirror Node archive |
+
+Not targeted: **No Solidity Allowed** (this project intentionally uses Solidity
+for escrow), **Tokenization** (no HTS), **x402** (no pay-per-request flow), and
+**Schedule Service** (deadlines are contract-enforced, not scheduled
+transactions).
 
 **0G** — two layers.
 
@@ -198,7 +216,7 @@ Things that cost real time and are easy to get wrong again:
 aivy-checkout/
   src/CheckoutEscrow.sol          itemized escrow state machine + auto-release
   src/ItemVerdictVerifier.sol     the ecrecover verdict core
-  test/                           17 forge tests
+  test/                           22 forge tests
   offchain/
     api-server.ts                 HTTP API: World ID gate, checkouts, evidence
     payload.ts                    shared ItemVerdict schema + signer
@@ -214,8 +232,9 @@ aivy-checkout/
 
 `RPC_URL`, `RELAYER_PRIVATE_KEY`, `ESCROW_ADDRESS`, `PORT`, `CORS_ORIGIN`,
 `OPENAI_API_KEY`, `HCS_TOPIC_ID`, `HEDERA_OPERATOR_ID`/`HEDERA_OPERATOR_KEY`,
-`WORLD_APP_ID`/`WORLD_ACTION`, `ZEROG_RPC_URL`/`ZEROG_INDEXER_URL`/`ZEROG_PRIVATE_KEY`,
-`ZEROG_TIMEOUT_MS`.
+`WORLD_APP_ID`/`WORLD_ACTION`, `WORLD_RP_ID`/`WORLD_RP_SIGNING_KEY`,
+`SELFIE_CHECK_ENABLED`, `ZEROG_RPC_URL`/`ZEROG_INDEXER_URL`/`ZEROG_PRIVATE_KEY`,
+`ZEROG_TIMEOUT_MS`/`ZEROG_COMPUTE`.
 
 Unset `WORLD_APP_ID` and the app runs in simulator mode; unset the 0G or vision creds
 and each falls back loudly rather than silently. The contract flow is identical either

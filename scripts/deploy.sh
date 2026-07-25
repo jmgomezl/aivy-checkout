@@ -10,7 +10,7 @@ echo "== build frontend =="
 
 echo "== bundle backend =="
 (cd offchain && npx esbuild api-server.ts --bundle --platform=node --format=esm --target=node20 \
-  --external:@0glabs/0g-ts-sdk --external:@anthropic-ai/sdk --external:@hashgraph/sdk \
+  --external:@0glabs/0g-ts-sdk --external:@0gfoundation/0g-storage-ts-sdk --external:@anthropic-ai/sdk --external:@hashgraph/sdk --external:@worldcoin/idkit-core \
   --outfile=/tmp/aivy-deploy/offchain/server.mjs \
   --banner:js="import { createRequire } from 'module'; const require = createRequire(import.meta.url);")
 mkdir -p /tmp/aivy-deploy/out/CheckoutEscrow.sol
