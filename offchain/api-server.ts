@@ -28,6 +28,8 @@ import {
   JsonRpcProvider,
   NonceManager,
   Wallet,
+  getAddress,
+  isAddress,
   keccak256,
   toUtf8Bytes,
   parseEther,
@@ -121,7 +123,28 @@ async function verifyHuman(body: any): Promise<{ ok: boolean; nullifier: string;
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
-async function createDemoCheckout(nullifier: string) {
+/**
+ * Resolve the tenant payout address. On Hedera, a contract transfer to an
+ * address with NO existing account reverts — which would trap the deposit
+ * until the timeout. So a custom payout target must exist on-chain first.
+ */
+async function resolvePayout(tenantAddress?: string): Promise<string> {
+  if (!tenantAddress) return Wallet.createRandom().address; // demo throwaway
+  if (!isAddress(tenantAddress)) throw new Error("invalid payout address");
+  const addr = getAddress(tenantAddress);
+  if (network.startsWith("hedera")) {
+    const net = network === "hedera-mainnet" ? "mainnet" : "testnet";
+    const res = await fetch(`https://${net}.mirrornode.hedera.com/api/v1/accounts/${addr.toLowerCase()}`);
+    if (!res.ok) {
+      throw new Error(
+        "that wallet has no Hedera account yet — open OculusVault once (it auto-creates on first receive) or fund it, then retry"
+      );
+    }
+  }
+  return addr;
+}
+
+async function createDemoCheckout(nullifier: string, tenantAddress?: string) {
   // one human, one live checkout — the World ID nullifier is the sybil key
   const existing = humanToCheckout.get(nullifier);
   if (existing && checkoutMeta.has(existing)) {
@@ -130,7 +153,7 @@ async function createDemoCheckout(nullifier: string) {
   }
 
   const id = nextCheckoutId++;
-  const tenant = Wallet.createRandom().address; // demo payout target
+  const tenant = await resolvePayout(tenantAddress);
   // HEDERA GOTCHA: inside Hedera's EVM, msg.value is in tinybar (8 decimals),
   // while the JSON-RPC relay takes tx value in 18-decimal weibar. So the
   // stored deposit must be tinybar-scaled on Hedera or the == check reverts.
@@ -345,7 +368,7 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const human = await verifyHuman(body);
       if (!human.ok) return json(res, 401, { error: "personhood verification failed" });
-      return json(res, 200, await createDemoCheckout(human.nullifier));
+      return json(res, 200, await createDemoCheckout(human.nullifier, body.tenantAddress ? String(body.tenantAddress) : undefined));
     }
     const mGet = /^\/api\/checkout\/(\d+)$/.exec(path);
     if (mGet && req.method === "GET") {

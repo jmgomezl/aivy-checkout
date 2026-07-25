@@ -224,6 +224,7 @@ export default function App() {
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [showReceipt, setShowReceipt] = useState(false);
   const [releasedAt, setReleasedAt] = useState<Date | null>(null);
+  const [payout, setPayout] = useState<string>(() => localStorage.getItem("aivy:payout") ?? "");
   const [error, setError] = useState<string>("");
   const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string } | null>(null);
 
@@ -262,11 +263,13 @@ export default function App() {
   const start = useCallback(async () => {
     setError("");
     try {
-      setCheckout(await api<Checkout>("/api/demo/checkout", { nullifier }));
+      const addr = payout.trim();
+      if (addr) localStorage.setItem("aivy:payout", addr);
+      setCheckout(await api<Checkout>("/api/demo/checkout", { nullifier, tenantAddress: addr || undefined }));
     } catch (e: any) {
       setError(e.message);
     }
-  }, [nullifier]);
+  }, [nullifier, payout]);
 
   const submit = useCallback(
     async (item: Item, file: File) => {
@@ -345,6 +348,27 @@ export default function App() {
             Start your apartment checkout. The host escrowed your deposit on-chain; pass every
             checklist item and it releases to you <b>instantly</b>.
           </p>
+          <div className="payout">
+            <label className="tiny muted" htmlFor="payout">
+              Payout wallet — your <b>OculusVault</b> address (optional)
+            </label>
+            <input
+              id="payout"
+              className="addr mono"
+              placeholder="0x… leave empty for a demo wallet"
+              value={payout}
+              onChange={(e) => setPayout(e.target.value)}
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <p className="tiny muted">
+              Don&apos;t have one?{" "}
+              <a className="hashlink" href="https://t.me/oculusvaultbot/app" target="_blank" rel="noreferrer">
+                Open OculusVault ↗
+              </a>{" "}
+              — copy your EVM address and the deposit pays out straight to your wallet.
+            </p>
+          </div>
           <button className="primary" onClick={start}>
             Start checkout
           </button>

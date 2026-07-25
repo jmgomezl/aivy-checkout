@@ -51,3 +51,8 @@ footer { margin-top: 8px; }
 span.hashlink { color: var(--fg); }
 .passtext { color: var(--ok-line); font-size: 12px; text-align: right; }
 .receipt-foot { padding: 0 6px; }
+
+/* ── payout wallet input ───────────────────────────────────────────── */
+.payout { text-align: left; margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.addr { background: #0d1117; border: 1px solid var(--line); color: var(--fg); border-radius: 10px; padding: 11px 12px; font-size: 13px; width: 100%; }
+.addr:focus { outline: none; border-color: var(--brand); }
