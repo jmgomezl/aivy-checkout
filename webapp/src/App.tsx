@@ -75,8 +75,37 @@ function fileToDataUrl(f: File): Promise<string> {
   });
 }
 
+/**
+ * iPhones hand us HEIC, which the vision API rejects outright (400 unsupported
+ * image) — the verdict never runs and the item just fails. Re-encode every
+ * capture to JPEG through a canvas, downscaling on the way: it also turns a
+ * 4 MB photo into ~300 KB, which on venue wifi is the difference between a
+ * 2-second and a 20-second upload.
+ */
+async function fileToJpegDataUrl(f: File, maxEdge = 1600, quality = 0.85): Promise<string> {
+  let bitmap: ImageBitmap | null = null;
+  try {
+    bitmap = await createImageBitmap(f, { imageOrientation: "from-image" } as any);
+  } catch {
+    try {
+      bitmap = await createImageBitmap(f); // older Safari: no orientation option
+    } catch {
+      return fileToDataUrl(f); // can't decode it here — let the server say why
+    }
+  }
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return fileToDataUrl(f);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
 const ITEM_ICON: Record<string, string> = {
-  espresso_machine: "☕", chair: "🪑", bedroom_door: "🚪",
+  chair: "🪑", table: "🍽", espresso_machine: "☕", bedroom_door: "🚪",
   front_bumper: "🚗", driver_side: "🪞", dashboard: "🎛",
   scooter_deck: "🛴", brake_lever: "🖐", battery_readout: "🔋",
   parcel_intact: "📦", label_visible: "🏷", product_facing: "🛒",
@@ -377,7 +406,7 @@ export default function App() {
       setBusyItem(item.name);
       setError("");
       try {
-        const imageDataUrl = await fileToDataUrl(file);
+        const imageDataUrl = await fileToJpegDataUrl(file);
         setThumbs((t) => ({ ...t, [item.name]: imageDataUrl }));
         const out = await api<EvidenceResult>(`/api/checkout/${checkout.checkoutId}/evidence`, {
           nullifier,
@@ -618,7 +647,9 @@ export default function App() {
                           {busyItem === item.name ? <PipelineTicker /> : <span>◉&nbsp;&nbsp;CAPTURE EVIDENCE</span>}
                           <input
                             type="file"
-                            accept="image/*"
+                            // naming the formats (rather than image/*) makes iOS
+                            // transcode HEIC to JPEG before it reaches us
+                            accept="image/jpeg,image/png,image/webp"
                             capture="environment"
                             disabled={busyItem !== null}
                             onChange={(e) => {

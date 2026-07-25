@@ -58,12 +58,14 @@ const TEMPLATES: Template[] = [
     blurb: "Tenant proves the place is fine; deposit releases itself.",
     icon: "🏠",
     items: [
-      // Nonces have to be stageable with props that are actually to hand and
-      // unambiguous to a vision model. Fingers held against a screen read as
-      // noise; a pen lying on a surface reads as a placed object.
-      { name: "espresso_machine", desc: "espresso machine on the kitchen counter, undamaged", nonce: "place a yellow pen next to the espresso machine" },
+      // Two items, not three: this gets demoed live and repeatedly, so every
+      // item is another chance for venue wifi or a bad angle to derail it.
+      // Two still shows the progression and the auto-release on the last pass.
+      // Both objects exist in every venue on earth, and the two nonces use
+      // different mechanics — one placed prop, one bare hand — so losing the
+      // pen costs one item instead of the whole demo.
       { name: "chair", desc: "chair with an intact seat and backrest, no cracks or wobbling legs", nonce: "lay a yellow pen across the seat of the chair" },
-      { name: "bedroom_door", desc: "bedroom door with no holes or dents", nonce: "press an open palm flat on the bedroom door" },
+      { name: "table", desc: "table top with no chips, burns or deep scratches", nonce: "press an open palm flat on the table top" },
     ],
   },
   {
@@ -323,9 +325,21 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
   if (meta.noncesReady) await meta.noncesReady;
 
   // decode data URL -> tmp file
-  const m = /^data:(image\/\w+);base64,(.+)$/s.exec(imageDataUrl ?? "");
+  const m = /^data:(image\/[\w.+-]+);base64,(.+)$/s.exec(imageDataUrl ?? "");
   if (!m) throw new Error("imageDataUrl must be a base64 image data URL");
-  const ext = m[1] === "image/png" ? ".png" : ".jpg";
+  // Don't relabel what we can't identify: an iPhone HEIC written to a .jpg
+  // reaches the vision API as a corrupt JPEG and comes back as an opaque 400.
+  // Fail here instead, with something the person holding the phone can act on.
+  const EXT: Record<string, string> = {
+    "image/jpeg": ".jpg", "image/jpg": ".jpg", "image/png": ".png",
+    "image/webp": ".webp", "image/gif": ".gif",
+  };
+  const ext = EXT[m[1].toLowerCase()];
+  if (!ext) {
+    throw new Error(
+      `photo format ${m[1]} isn't supported — shoot it with the camera button instead of picking from the library`
+    );
+  }
   const dir = mkdtempSync(join(tmpdir(), "aivy-"));
   const imagePath = join(dir, `${itemName}${ext}`);
   writeFileSync(imagePath, Buffer.from(m[2], "base64"));
