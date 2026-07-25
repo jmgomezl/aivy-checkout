@@ -111,6 +111,16 @@ const ITEM_ICON: Record<string, string> = {
   parcel_intact: "📦", label_visible: "🏷", product_facing: "🛒",
   price_tag: "💶", shelf_context: "🗄",
 };
+type ArchivedItem = { item: string; verdict: "PASS" | "FAIL"; tx?: string };
+type Archived = {
+  sequence: number;
+  checkoutId: number;
+  outcome: string;
+  tenant?: string;
+  releaseTx?: string;
+  ts: string;
+  items: ArchivedItem[];
+};
 type TemplateCard = { id: string; title: string; payer: string; blurb: string; icon: string; itemCount: number };
 type DraftItem = { name: string; desc: string; nonce: string };
 const PIPELINE = ["UPLOADING EVIDENCE", "HASHING → 0G STORAGE", "AI VISION ANALYZING", "SIGNING VERDICT", "SETTLING ON-CHAIN"];
@@ -200,6 +210,17 @@ function SettlementTicker({ items }: { items: number }) {
     </div>
   );
 }
+
+/**
+ * The raw backend enum leaks into the UI otherwise, and "0g-pending" reads like
+ * a bug rather than what it is: the blob is on its way to 0G and we refused to
+ * make a human wait for finalization. Same hash goes on-chain either way.
+ */
+const STORAGE_LABEL: Record<string, string> = {
+  "0g": "0G STORAGE",
+  "0g-pending": "0G · FINALIZING",
+  local: "LOCAL FALLBACK",
+};
 
 function explorerBase(network: string): string | null {
   if (network === "hedera-testnet") return "https://hashscan.io/testnet";
@@ -326,7 +347,14 @@ function Receipt({
 // ---------------------------------------------------------------------------
 export default function App() {
   const [nullifier, setNullifier] = useNullifier();
-  const [verified, setVerified] = useState(false);
+  /**
+   * A reload used to throw you back to the QR even though the nullifier was
+   * cached — brutal when the demo runs several times. Remember the gate, but
+   * only optimistically: in live mode the server accepts a bare nullifier only
+   * if it proved itself since the last boot, so any personhood rejection drops
+   * this and puts the gate back (see dropVerification).
+   */
+  const [verified, setVerified] = useState(() => localStorage.getItem("aivy:verified") === "1");
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [busyItem, setBusyItem] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, EvidenceResult>>({});
@@ -335,8 +363,9 @@ export default function App() {
   const [releasedAt, setReleasedAt] = useState<Date | null>(null);
   const [payout, setPayout] = useState<string>(() => localStorage.getItem("aivy:payout") ?? "");
   const [error, setError] = useState<string>("");
-  const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string } | null>(null);
+  const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null } | null>(null);
   const [templates, setTemplates] = useState<TemplateCard[]>([]);
+  const [archive, setArchive] = useState<Archived[]>([]);
   const [picked, setPicked] = useState<TemplateCard | null>(null);
   const [building, setBuilding] = useState(false);
   const [draft, setDraft] = useState<DraftItem[]>([{ name: "", desc: "", nonce: "" }]);
@@ -351,8 +380,14 @@ export default function App() {
     // the viewer's own theme and a light-mode judge gets a white header band
     tg?.setHeaderColor?.("#07090d");
     tg?.setBackgroundColor?.("#07090d");
-    api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string }>("/api/health").then(setHealth).catch(() => {});
+    api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null }>("/api/health").then(setHealth).catch(() => {});
     api<{ templates: TemplateCard[] }>("/api/templates").then((t) => setTemplates(t.templates)).catch(() => {});
+    loadArchive();
+  }, []);
+
+  /** The archive is a mirror-node read of the HCS topic — see readHistory(). */
+  const loadArchive = useCallback(() => {
+    api<{ receipts: Archived[] }>("/api/history").then((h) => setArchive(h.receipts ?? [])).catch(() => {});
   }, []);
 
   const verify = useCallback(async () => {
@@ -361,6 +396,7 @@ export default function App() {
       const out = await api<{ linkedWallet?: string | null }>("/api/verify-human", { nullifier });
       if (out.linkedWallet && !payout) setPayout(out.linkedWallet);
       setVerified(true);
+      localStorage.setItem("aivy:verified", "1");
       tg?.HapticFeedback?.notificationOccurred?.("success");
     } catch (e: any) {
       setError(e.message);
@@ -375,6 +411,7 @@ export default function App() {
       setNullifier(out.nullifier);
       localStorage.setItem("aivy:nullifier", out.nullifier);
       setVerified(true);
+      localStorage.setItem("aivy:verified", "1");
       tg?.HapticFeedback?.notificationOccurred?.("success");
     } catch (e: any) {
       setError("World ID verification failed: " + e.message);
@@ -387,6 +424,17 @@ export default function App() {
    * resuming the case you just walked away from (see createDemoCheckout) —
    * otherwise the next run inherits its already-passed items and can't redo them.
    */
+  /**
+   * The remembered gate is optimistic: the server only accepts a bare nullifier
+   * that proved itself since its last boot. If it says no, put the QR back
+   * rather than leaving someone staring at a rejection they can't act on.
+   */
+  const dropVerification = useCallback(() => {
+    localStorage.removeItem("aivy:verified");
+    setVerified(false);
+    setError("that session expired — verify once more with World ID");
+  }, []);
+
   const resetDemo = useCallback(() => {
     wantFresh.current = true;
     setCheckout(null);
@@ -418,7 +466,8 @@ export default function App() {
       else if (picked) payload.templateId = picked.id;
       setCheckout(await api<Checkout>("/api/demo/checkout", payload));
     } catch (e: any) {
-      setError(e.message);
+      if (/personhood/i.test(e.message)) dropVerification();
+      else setError(e.message);
     } finally {
       starting.current = false;
       setSettling(false);
@@ -443,10 +492,14 @@ export default function App() {
         if (out.checkout.status === "Released") {
           setReleasedAt(new Date());
           setShowReceipt(true);
+          // the seal lands a beat after the release; give HCS + the mirror node
+          // a moment before asking for the archive again
+          setTimeout(loadArchive, 6000);
         }
         tg?.HapticFeedback?.notificationOccurred?.(out.verdict === "PASS" ? "success" : "error");
       } catch (e: any) {
-        setError(e.message);
+        if (/personhood/i.test(e.message)) dropVerification();
+        else setError(e.message);
       } finally {
         setBusyItem(null);
       }
@@ -534,6 +587,47 @@ export default function App() {
           </section>
         )}
 
+        {/* ─── ARCHIVE: past cases, replayed from HCS ───────────────── */}
+        {verified && !checkout && !picked && !building && archive.length > 0 && (
+          <section className="panel archive reveal d3">
+            <h2 className="panel-title">EVERY CASE<br />STAYS PROVABLE.</h2>
+            <p className="panel-copy">
+              These aren't rows in our database — they're the receipts themselves, read back
+              from Hedera Consensus Service. Anyone with the topic can replay them.
+            </p>
+            <ul className="arch-list">
+              {archive.map((h) => (
+                <li key={h.sequence} className="arch-row">
+                  <div className="arch-head">
+                    <span className="arch-no">CASE Nº {h.checkoutId}</span>
+                    <span className="arch-when">{new Date(h.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                  <div className="arch-items">
+                    {h.items.map((it, i) => (
+                      <span key={i} className={`arch-chip ${it.verdict === "PASS" ? "ok" : "no"}`}>
+                        {ITEM_ICON[it.item] ?? "▣"} {it.item.replace(/_/g, " ")} {it.verdict === "PASS" ? "✓" : "✕"}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="arch-foot">
+                    <span className="arch-seal">HCS SEQ #{h.sequence} · {h.outcome}</span>
+                    {h.releaseTx && explorerBase(health?.network ?? "") && (
+                      <a className="hashlink" href={`${explorerBase(health?.network ?? "")}/transaction/${h.releaseTx}`} target="_blank" rel="noreferrer">
+                        release tx ↗
+                      </a>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {health?.hcsTopic && explorerBase(health?.network ?? "") && (
+              <a className="hashlink arch-topic" href={`${explorerBase(health?.network ?? "")}/topic/${health.hcsTopic}`} target="_blank" rel="noreferrer">
+                OPEN TOPIC {health.hcsTopic} ON HASHSCAN ↗
+              </a>
+            )}
+          </section>
+        )}
+
         {/* ─── BUILDER: custom inspection ───────────────────────────── */}
         {verified && !checkout && building && (
           <section className="panel reveal">
@@ -571,7 +665,13 @@ export default function App() {
                 <input id="payout2" className="addr" placeholder="0x…" value={payout} onChange={(e) => setPayout(e.target.value)} spellCheck={false} />
               </div>
             )}
-            <button className="cta" onClick={start}>ESCROW &amp; BEGIN</button>
+            {/* the builder opens the same escrow as a template, so it owes the
+                same ~10s of narration — this path was left inert */}
+            {settling ? (
+              <SettlementTicker items={draft.length} />
+            ) : (
+              <button className="cta" onClick={start}>ESCROW &amp; BEGIN</button>
+            )}
           </section>
         )}
 
@@ -696,7 +796,7 @@ export default function App() {
                       <div className="ev-result">
                         <div className="ev-kv"><span>ai&nbsp;verdict</span><span className={r.verdict === "PASS" ? "ink-lime" : "ink-red"}>{r.verdict} · {r.brain}</span></div>
                         <div className="ev-kv"><span>reason</span><span>{r.reason}</span></div>
-                        <div className="ev-kv"><span>evidence</span><span>{r.imageHash.slice(0, 18)}… ({r.storageBackend})</span></div>
+                        <div className="ev-kv"><span>evidence</span><span>{r.imageHash.slice(0, 18)}… · {STORAGE_LABEL[r.storageBackend] ?? r.storageBackend}</span></div>
                         {r.txHash && <div className="ev-kv"><span>tx</span><span>{r.txHash.slice(0, 18)}…</span></div>}
                       </div>
                     )}

@@ -293,6 +293,71 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   return describeCheckout(id);
 }
 
+// ---------------------------------------------------------------------------
+// Case archive — read back from HCS, not from our own memory
+// ---------------------------------------------------------------------------
+/**
+ * The receipts sealed to HCS *are* the history: public, durable, and readable
+ * by anyone holding the topic id — including after this process restarts with
+ * empty maps. So the archive is a mirror-node read, not a database.
+ *
+ * Receipts run past the 1 KB HCS message cap (signatures are long), so they
+ * arrive as numbered chunks that must be reassembled in order. A receipt whose
+ * chunks straddle the page boundary is simply not whole yet, and is skipped
+ * rather than shown half-parsed.
+ */
+let historyCache: { at: number; data: any[] } = { at: 0, data: [] };
+
+async function readHistory(limit = 8): Promise<any[]> {
+  const topicId = process.env.HCS_TOPIC_ID;
+  if (!topicId) return [];
+  if (Date.now() - historyCache.at < 15_000) return historyCache.data.slice(0, limit);
+
+  const net = network === "hedera-mainnet" ? "mainnet" : "testnet";
+  const url = `https://${net}.mirrornode.hedera.com/api/v1/topics/${topicId}/messages?limit=60&order=desc`;
+  let body: any;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return historyCache.data.slice(0, limit);
+    body = await res.json();
+  } catch {
+    return historyCache.data.slice(0, limit); // mirror hiccup: serve what we had
+  }
+
+  const groups = new Map<string, any[]>();
+  for (const m of body.messages ?? []) {
+    const key = m.chunk_info?.initial_transaction_id?.transaction_valid_start ?? `seq-${m.sequence_number}`;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(m);
+    else groups.set(key, [m]);
+  }
+
+  const out: any[] = [];
+  for (const parts of groups.values()) {
+    parts.sort((a, b) => (a.chunk_info?.number ?? 1) - (b.chunk_info?.number ?? 1));
+    if (parts.length !== (parts[0].chunk_info?.total ?? 1)) continue;
+    try {
+      const blob = Buffer.concat(parts.map((p) => Buffer.from(p.message, "base64"))).toString("utf8");
+      const r = JSON.parse(blob);
+      if (r?.app !== "aivy-checkout") continue;
+      out.push({
+        sequence: parts[0].sequence_number,
+        checkoutId: r.checkoutId,
+        outcome: r.outcome,
+        tenant: r.tenant,
+        releaseTx: r.releaseTx,
+        ts: r.ts,
+        items: (r.items ?? []).map((i: any) => ({ item: i.item, verdict: i.verdict, tx: i.tx })),
+      });
+    } catch {
+      // a malformed receipt is not worth failing the whole archive over
+    }
+  }
+  out.sort((a, b) => b.sequence - a.sequence);
+  historyCache = { at: Date.now(), data: out };
+  return out.slice(0, limit);
+}
+
 async function describeCheckout(id: number) {
   const meta = checkoutMeta.get(id);
   const c = await escrow.getFunction("getCheckout")(id);
@@ -497,6 +562,9 @@ const server = createServer(async (req, res) => {
     if (path === "/api/verify-human" && req.method === "POST") {
       const out = await verifyHuman(await readBody(req));
       return json(res, out.ok ? 200 : 400, { ...out, linkedWallet: out.ok ? nullifierWallet.get(out.nullifier) ?? null : null });
+    }
+    if (path === "/api/history" && req.method === "GET") {
+      return json(res, 200, { topic: process.env.HCS_TOPIC_ID ?? null, receipts: await readHistory() });
     }
     if (path === "/api/templates" && req.method === "GET") {
       return json(res, 200, { templates: TEMPLATES.map(({ id, title, payer, blurb, icon, items }) => ({ id, title, payer, blurb, icon, itemCount: items.length })) });
