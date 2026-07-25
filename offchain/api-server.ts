@@ -60,6 +60,7 @@ let nextCheckoutId = Math.floor(Date.now() / 1000) % 1_000_000; // unique-ish pe
 // sybil gate: one human -> one active demo checkout
 const humanToCheckout = new Map<string, number>();
 const checkoutMeta = new Map<number, { items: typeof ITEMS; tenant: string }>();
+const evidenceLog = new Map<number, Array<Record<string, unknown>>>();
 
 const ARTIFACT = JSON.parse(
   readFileSync(new URL("../out/CheckoutEscrow.sol/CheckoutEscrow.json", import.meta.url), "utf8")
@@ -211,7 +212,22 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
   );
   const receipt = await tx.wait();
 
+  const log = evidenceLog.get(id) ?? [];
+  log.push({
+    item: item.name,
+    verdict: verdict.pass ? "PASS" : "FAIL",
+    imageHash: stored.imageHash,
+    evidenceUri: stored.uri,
+    signature: sig,
+    tx: receipt?.hash,
+  });
+  evidenceLog.set(id, log);
+
   const state = await describeCheckout(id);
+  let hcsSeal = null;
+  if (state.status === "Released") {
+    hcsSeal = await sealToHcs(id, receipt?.hash);
+  }
   return {
     item: item.name,
     verdict: verdict.pass ? "PASS" : "FAIL",
@@ -226,8 +242,50 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
     verifier: relayerWallet.address,
     txHash: receipt?.hash,
     verifiedAt: new Date().toISOString(),
+    hcsSeal,
     checkout: state,
   };
+}
+
+// ---------------------------------------------------------------------------
+// HCS sealing — the immutable receipt log (fire-and-forget on release)
+// ---------------------------------------------------------------------------
+async function sealToHcs(checkoutId: number, releaseTx: string | undefined) {
+  const topicId = process.env.HCS_TOPIC_ID;
+  const opId = process.env.HEDERA_OPERATOR_ID;
+  const opKey = process.env.HEDERA_OPERATOR_KEY;
+  if (!topicId || !opId || !opKey) {
+    console.warn("[api] ⚠️  HCS creds not set — receipt NOT sealed (set HCS_TOPIC_ID/HEDERA_OPERATOR_ID/HEDERA_OPERATOR_KEY)");
+    return null;
+  }
+  try {
+    const { Client, PrivateKey, TopicMessageSubmitTransaction } = await import("@hashgraph/sdk");
+    const client = Client.forTestnet().setOperator(opId, PrivateKey.fromStringECDSA(opKey));
+    const meta = checkoutMeta.get(checkoutId);
+    const receipt = {
+      v: 1,
+      app: "aivy-checkout",
+      checkoutId,
+      escrow: await escrow.getAddress(),
+      tenant: meta?.tenant,
+      outcome: "RELEASED",
+      releaseTx,
+      items: evidenceLog.get(checkoutId) ?? [],
+      ts: new Date().toISOString(),
+    };
+    const tx = await new TopicMessageSubmitTransaction({
+      topicId,
+      message: JSON.stringify(receipt),
+    }).execute(client);
+    const rec = await tx.getReceipt(client);
+    client.close();
+    const seq = rec.topicSequenceNumber?.toString();
+    console.log(`[api] ✅ receipt sealed to HCS topic ${topicId} seq ${seq}`);
+    return { topicId, sequence: seq };
+  } catch (e) {
+    console.error("[api] HCS seal failed:", e);
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
