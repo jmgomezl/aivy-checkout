@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { IDKitWidget, VerificationLevel, type ISuccessResult } from "@worldcoin/idkit";
 
 /**
  * Aivy Checkout — tenant mini app (Stage 4).
@@ -38,10 +39,10 @@ type EvidenceResult = {
 
 const tg = (window as any).Telegram?.WebApp;
 
-function useNullifier(): string {
-  // Simulator personhood: stable per device. Replaced by the real IDKit
-  // nullifier_hash when WORLD_APP_ID is configured server-side.
-  const [n] = useState(() => {
+function useNullifier(): [string, (n: string) => void] {
+  // Simulator personhood: stable per device. Overridden by the real IDKit
+  // nullifier_hash after a successful World ID verification.
+  const [n, setN] = useState(() => {
     const k = "aivy:nullifier";
     let v = localStorage.getItem(k);
     if (!v) {
@@ -50,7 +51,7 @@ function useNullifier(): string {
     }
     return v;
   });
-  return n;
+  return [n, setN];
 }
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -215,7 +216,7 @@ function Receipt({
 }
 
 export default function App() {
-  const nullifier = useNullifier();
+  const [nullifier, setNullifier] = useNullifier();
   const [verified, setVerified] = useState(false);
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [busyItem, setBusyItem] = useState<string | null>(null);
@@ -224,12 +225,12 @@ export default function App() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [releasedAt, setReleasedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string>("");
-  const [health, setHealth] = useState<{ worldId: string } | null>(null);
+  const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string } | null>(null);
 
   useEffect(() => {
     tg?.ready?.();
     tg?.expand?.();
-    api<{ worldId: string }>("/api/health").then(setHealth).catch(() => {});
+    api<{ worldId: string; worldAppId?: string; worldAction?: string }>("/api/health").then(setHealth).catch(() => {});
   }, []);
 
   const verify = useCallback(async () => {
@@ -242,6 +243,21 @@ export default function App() {
       setError(e.message);
     }
   }, [nullifier]);
+
+  // Real World ID: IDKit hands us the ZK proof; the server verifies it with
+  // the Developer Portal and from then on the nullifier_hash is our identity.
+  const onWorldIdSuccess = useCallback(async (proof: ISuccessResult) => {
+    setError("");
+    try {
+      const out = await api<{ ok: boolean; nullifier: string }>("/api/verify-human", { proof });
+      setNullifier(out.nullifier);
+      localStorage.setItem("aivy:nullifier", out.nullifier);
+      setVerified(true);
+      tg?.HapticFeedback?.notificationOccurred?.("success");
+    } catch (e: any) {
+      setError("World ID verification failed: " + e.message);
+    }
+  }, [setNullifier]);
 
   const start = useCallback(async () => {
     setError("");
@@ -298,11 +314,26 @@ export default function App() {
             One human, one checkout. Your World ID nullifier is the sybil-resistance key — no
             documents, no doxxing.
           </p>
-          <button className="primary" onClick={verify}>
-            {health?.worldId === "live" ? "Verify with World ID" : "Verify (World ID Simulator)"}
-          </button>
-          {health?.worldId !== "live" && (
-            <p className="tiny muted">Simulator mode — set WORLD_APP_ID server-side to go live.</p>
+          {health?.worldAppId ? (
+            <IDKitWidget
+              app_id={health.worldAppId as `app_${string}`}
+              action={health.worldAction ?? "aivy-checkout"}
+              verification_level={VerificationLevel.Device}
+              onSuccess={onWorldIdSuccess}
+            >
+              {({ open }) => (
+                <button className="primary" onClick={open}>
+                  🌐 Verify with World ID
+                </button>
+              )}
+            </IDKitWidget>
+          ) : (
+            <>
+              <button className="primary" onClick={verify}>
+                Verify (World ID Simulator)
+              </button>
+              <p className="tiny muted">Simulator mode — set WORLD_APP_ID server-side to go live.</p>
+            </>
           )}
         </section>
       )}

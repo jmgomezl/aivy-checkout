@@ -59,6 +59,8 @@ let nextCheckoutId = Math.floor(Date.now() / 1000) % 1_000_000; // unique-ish pe
 
 // sybil gate: one human -> one active demo checkout
 const humanToCheckout = new Map<string, number>();
+// nullifiers that passed a REAL World ID proof this boot (live mode only)
+const verifiedNullifiers = new Set<string>();
 const checkoutMeta = new Map<number, { items: typeof ITEMS; tenant: string }>();
 const evidenceLog = new Map<number, Array<Record<string, unknown>>>();
 
@@ -102,11 +104,16 @@ async function verifyHuman(body: any): Promise<{ ok: boolean; nullifier: string;
       }),
     });
     const j: any = await res.json();
-    return { ok: res.ok && j.success !== false, nullifier: body.proof.nullifier_hash, mode: "world-id" };
+    const ok = res.ok && j.success !== false;
+    if (ok) verifiedNullifiers.add(body.proof.nullifier_hash);
+    return { ok, nullifier: body.proof.nullifier_hash, mode: "world-id" };
   }
-  // Simulator mode: accept a client nullifier, loudly labeled.
   const nullifier = String(body?.nullifier ?? "").slice(0, 128);
-  if (!nullifier) return { ok: false, nullifier: "", mode: "simulator" };
+  if (!nullifier) return { ok: false, nullifier: "", mode: appId ? "world-id" : "simulator" };
+  if (appId) {
+    // Live mode without a proof: only accept nullifiers already proven this boot.
+    return { ok: verifiedNullifiers.has(nullifier), nullifier, mode: "world-id" };
+  }
   console.warn(`[api] ⚠️  WORLD_APP_ID not set — SIMULATED personhood for nullifier ${nullifier.slice(0, 18)}…`);
   return { ok: true, nullifier, mode: "simulator" };
 }
@@ -328,7 +335,7 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === "OPTIONS") return json(res, 204, {});
     if (path === "/api/health") {
-      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, network, hcsTopic: process.env.HCS_TOPIC_ID ?? null, worldId: process.env.WORLD_APP_ID ? "live" : "simulator" });
+      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, network, hcsTopic: process.env.HCS_TOPIC_ID ?? null, worldId: process.env.WORLD_APP_ID ? "live" : "simulator", worldAppId: process.env.WORLD_APP_ID ?? null, worldAction: process.env.WORLD_ACTION ?? "aivy-checkout" });
     }
     if (path === "/api/verify-human" && req.method === "POST") {
       const out = await verifyHuman(await readBody(req));
