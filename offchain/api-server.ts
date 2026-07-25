@@ -70,15 +70,15 @@ const TEMPLATES: Template[] = [
       // Two items, not three: this gets demoed live and repeatedly, so every
       // item is another chance for venue wifi or a bad angle to derail it.
       // Two still shows the progression and the auto-release on the last pass.
-      // Both objects exist in every venue on earth, and the two nonces use
-      // different mechanics — one placed prop, one bare hand — so losing the
-      // pen costs one item instead of the whole demo.
+      // Both objects exist in every venue on earth. The nonce props are the
+      // two things we physically carry — a yellow plush toy and a green
+      // glowing lamp — distinctive, unguessable objects no stock photo has.
       // Condition wording has to be satisfiable by the actual object. "no
       // chips, burns or deep scratches" on a venue table fails honestly —
       // every venue table has all three — and a verifier told to fail when
       // uncertain will keep failing it. Describe structural damage, not wear.
-      { name: "chair", desc: "chair with an intact seat and backrest, no cracks or broken legs", nonce: "lay a yellow pen across the seat of the chair" },
-      { name: "laptop", desc: "laptop open, screen intact and casing not cracked", nonce: "rest one open palm flat beside the trackpad" },
+      { name: "chair", desc: "chair with an intact seat and backrest, no cracks or broken legs", nonce: "place the yellow plush toy with green hair on the seat of the chair" },
+      { name: "laptop", desc: "laptop open, screen intact and casing not cracked", nonce: "place the green glowing joystick lamp next to the laptop" },
     ],
   },
   {
@@ -163,7 +163,7 @@ const nullifierWallet = new Map<string, string>();
 const verifiedNullifiers = new Set<string>();
 const checkoutMeta = new Map<
   number,
-  { items: TemplateItem[]; tenant: string; template: string; icon: string; noncesReady?: Promise<void> }
+  { items: TemplateItem[]; tenant: string; template: string; icon: string; geoLock: boolean; timeLockMinutes: number; noncesReady?: Promise<void> }
 >();
 const evidenceLog = new Map<number, Array<Record<string, unknown>>>();
 
@@ -270,7 +270,7 @@ function sanitizeCustomItems(raw: any): TemplateItem[] {
   });
 }
 
-async function createDemoCheckout(nullifier: string, tenantAddress?: string, templateId?: string, customItems?: any, fresh = false) {
+async function createDemoCheckout(nullifier: string, tenantAddress?: string, templateId?: string, customItems?: any, fresh = false, geoLock = false, timeLockMinutes = 30) {
   // one human, one live checkout — the World ID nullifier is the sybil key
   const tpl = customItems ? null : (templateById(templateId ?? "rental_checkout") ?? TEMPLATES[0]);
   const items = customItems ? sanitizeCustomItems(customItems) : tpl!.items;
@@ -297,9 +297,11 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   // stored deposit must be tinybar-scaled on Hedera or the == check reverts.
   const isHedera = network.startsWith("hedera");
   const deposit = isHedera ? 2n * 10n ** 8n : parseEther("2");
+  // time lock: the whole checkout must finish inside this window (on-chain deadline)
+  const windowMin = Math.min(Math.max(Math.round(timeLockMinutes) || 30, 5), 120);
   // use CHAIN time, not wall time — dev chains (anvil) drift via evm_increaseTime
   const chainNow = (await provider.getBlock("latest"))!.timestamp;
-  const deadline = chainNow + 30 * 60;
+  const deadline = chainNow + windowMin * 60;
 
   await (await escrow.getFunction("createCheckout")(id, tenant, deposit, deadline, items.map((i) => itemIdOf(i.name)))).wait();
   // demo: relayer funds the deposit on the tenant's behalf via direct call
@@ -324,7 +326,7 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   noncesReady.catch((e) => console.error(`[api] checkout ${id} nonce commit failed —`, e?.message ?? e));
 
   humanToCheckout.set(nullifier, id);
-  checkoutMeta.set(id, { items, tenant, template: tpl ? tpl.title : "Custom Inspection", icon: tpl ? tpl.icon : "🛠", noncesReady });
+  checkoutMeta.set(id, { items, tenant, template: tpl ? tpl.title : "Custom Inspection", icon: tpl ? tpl.icon : "🛠", geoLock, timeLockMinutes: windowMin, noncesReady });
   console.log(`[api] checkout ${id} created for human ${nullifier.slice(0, 12)}… tenant=${tenant}`);
   return describeCheckout(id);
 }
@@ -415,18 +417,24 @@ async function describeCheckout(id: number) {
     status: ["None", "Created", "Funded", "Released", "Resolved"][Number(c.status)],
     template: meta?.template ?? "Inspection",
     templateIcon: meta?.icon ?? "▣",
+    geoLock: meta?.geoLock ?? false,
+    timeLockMinutes: meta?.timeLockMinutes ?? 30,
     network,
     hcsTopic: process.env.HCS_TOPIC_ID ?? null,
     items,
   };
 }
 
-async function submitEvidence(id: number, itemName: string, imageDataUrl: string, nullifier: string) {
+async function submitEvidence(id: number, itemName: string, imageDataUrl: string, nullifier: string, geo?: { lat: number; lng: number; acc?: number }) {
   const meta = checkoutMeta.get(id);
   if (!meta) throw new Error("unknown checkout");
   if (humanToCheckout.get(nullifier) !== id) throw new Error("this human is not the tenant of this checkout");
   const item = meta.items.find((i) => i.name === itemName);
   if (!item) throw new Error("unknown item");
+  if (meta.geoLock) {
+    const ok = geo && Number.isFinite(geo.lat) && Number.isFinite(geo.lng) && Math.abs(geo.lat) <= 90 && Math.abs(geo.lng) <= 180;
+    if (!ok) throw new Error("geo-lock active: location is required with every capture (allow GPS and retry)");
+  }
 
   // createDemoCheckout returns before the nonce commits land (see there);
   // this is the point where they must be on-chain.
@@ -513,6 +521,7 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
     verifier: relayerWallet.address,
     txHash: receipt?.hash,
     verifiedAt: new Date().toISOString(),
+    geo: meta.geoLock && geo ? { lat: geo.lat, lng: geo.lng, acc: geo.acc ?? null } : null,
     hcsSeal,
     checkout: state,
   };
@@ -620,7 +629,9 @@ const server = createServer(async (req, res) => {
         body.tenantAddress ? String(body.tenantAddress) : undefined,
         body.templateId ? String(body.templateId) : undefined,
         body.customItems,
-        Boolean(body.fresh)
+        Boolean(body.fresh),
+        Boolean(body.geoLock),
+        Number(body.timeLockMinutes) || 30
       ));
     }
     const mGet = /^\/api\/checkout\/(\d+)$/.exec(path);
@@ -632,7 +643,7 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const human = await verifyHuman(body);
       if (!human.ok) return json(res, 401, { error: "personhood verification failed" });
-      const out = await submitEvidence(Number(mEv[1]), String(body.itemName), String(body.imageDataUrl), human.nullifier);
+      const out = await submitEvidence(Number(mEv[1]), String(body.itemName), String(body.imageDataUrl), human.nullifier, body.geo);
       return json(res, 200, out);
     }
     return json(res, 404, { error: "not found" });

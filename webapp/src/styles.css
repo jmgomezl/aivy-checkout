@@ -616,3 +616,20 @@ body {
 .linked-addr { font-size: 12px; }
 .linked-change { margin-left: auto; background: none; border: 0; color: var(--dim); font: 600 9.5px var(--display); letter-spacing: .14em; cursor: pointer; }
 .linked-change:hover { color: var(--lime); }
+
+/* ── locks (geo/time) ─────────────────────────────────────────────── */
+.locks { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.lock { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.lock input { display: none; }
+.lock-box { width: 16px; height: 16px; border: 1px solid var(--line-hot); border-radius: 3px; flex-shrink: 0; margin-top: 2px; position: relative; transition: all .15s; }
+.lock input:checked + .lock-box { background: var(--lime); border-color: var(--lime); box-shadow: 0 0 10px var(--lime-dim); }
+.lock input:checked + .lock-box::after { content: "✓"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink); font-size: 11px; font-weight: 800; }
+.lock-text { display: flex; flex-direction: column; }
+.lock-text b { font-size: 11px; letter-spacing: .1em; font-family: var(--display); font-weight: 600; }
+.lock-text i { font-style: normal; font-size: 10.5px; color: var(--dim); }
+.lock-mins { display: flex; gap: 6px; margin-left: 26px; }
+.lock-mins button { background: none; border: 1px solid var(--line-hot); color: var(--dim); border-radius: 3px; padding: 5px 10px; font: 600 9.5px var(--display); letter-spacing: .1em; cursor: pointer; }
+.lock-mins button.on { border-color: var(--lime); color: var(--lime); background: var(--lime-dim); }
+.lockchip { margin-left: 8px; color: var(--lime); font-size: 10px; letter-spacing: .08em; }
+.lockchip.hot { color: var(--red); animation: pulse 1s ease-in-out infinite; }
+.paper-locks { margin-top: 8px; font-size: 9px; letter-spacing: .16em; color: var(--paper-dim); font-weight: 700; }

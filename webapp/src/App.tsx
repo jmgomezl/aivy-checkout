@@ -19,6 +19,9 @@ type Checkout = {
   status: string;
   template: string;
   templateIcon: string;
+  geoLock: boolean;
+  timeLockMinutes: number;
+  deadline?: number;
   network: string;
   hcsTopic: string | null;
   items: Item[];
@@ -31,6 +34,7 @@ type EvidenceResult = {
   imageHash: string;
   evidenceUri: string;
   storageRoot?: string | null;
+  geo?: { lat: number; lng: number; acc?: number | null } | null;
   signature: string;
   verifier: string;
   txHash?: string;
@@ -223,6 +227,16 @@ const STORAGE_LABEL: Record<string, string> = {
   local: "LOCAL FALLBACK",
 };
 
+function Countdown({ to }: { to: number }) {
+  const [left, setLeft] = useState(() => Math.max(0, to - Math.floor(Date.now() / 1000)));
+  useEffect(() => {
+    const t = setInterval(() => setLeft(Math.max(0, to - Math.floor(Date.now() / 1000))), 1000);
+    return () => clearInterval(t);
+  }, [to]);
+  const m = Math.floor(left / 60), sec = left % 60;
+  return <b className={`lockchip ${left < 120 ? "hot" : ""}`}>⏱ {m}:{String(sec).padStart(2, "0")}</b>;
+}
+
 function explorerBase(network: string): string | null {
   if (network === "hedera-testnet") return "https://hashscan.io/testnet";
   if (network === "hedera-mainnet") return "https://hashscan.io/mainnet";
@@ -290,6 +304,12 @@ function Receipt({
             <div className="paper-sub">{checkout.template.toUpperCase()} · CRYPTOGRAPHIC RECEIPT · Nº {checkout.checkoutId}</div>
             <div className="paper-time">{when}</div>
             <div className="stamp">RELEASED · {checkout.depositHbar.toFixed(0)} ℏ</div>
+            {(checkout.geoLock || checkout.timeLockMinutes !== 30) && (
+              <div className="paper-locks">
+                {checkout.geoLock && "📍 GEO-LOCKED"}{checkout.geoLock && checkout.timeLockMinutes !== 30 && " · "}
+                {checkout.timeLockMinutes !== 30 && `⏱ ${checkout.timeLockMinutes}-MIN WINDOW`}
+              </div>
+            )}
           </header>
 
           <div className="paper-rule" />
@@ -311,6 +331,7 @@ function Receipt({
                     <tr><td>ai&nbsp;verdict</td><td>undamaged · nonce&nbsp;detected</td></tr>
                     <tr><td>signature</td><td><Hash value={r.signature} chars={16} /></td></tr>
                     {r.txHash && <tr><td>verdict&nbsp;tx</td><td><Hash value={r.txHash} href={exp ? `${exp}/transaction/${r.txHash}` : null} chars={16} /></td></tr>}
+                    {r.geo && <tr><td>geo</td><td>{r.geo.lat.toFixed(5)}, {r.geo.lng.toFixed(5)} (±{r.geo.acc ?? "?"}m)</td></tr>}
                   </tbody></table>
                 </div>
               </section>
@@ -370,6 +391,8 @@ export default function App() {
   const [picked, setPicked] = useState<TemplateCard | null>(null);
   const [building, setBuilding] = useState(false);
   const [draft, setDraft] = useState<DraftItem[]>([{ name: "", desc: "", nonce: "" }]);
+  const [geoLock, setGeoLock] = useState(false);
+  const [timeLock, setTimeLock] = useState(0); // 0 = default 30min, else minutes
   const starting = useRef(false);
   const wantFresh = useRef(false);
   const [settling, setSettling] = useState(false);
@@ -458,7 +481,7 @@ export default function App() {
     try {
       const addr = payout.trim();
       if (addr) localStorage.setItem("aivy:payout", addr);
-      const payload: any = { nullifier, tenantAddress: addr || undefined };
+      const payload: any = { nullifier, tenantAddress: addr || undefined, geoLock, timeLockMinutes: timeLock || 30 };
       if (wantFresh.current) {
         payload.fresh = true;
         wantFresh.current = false;
@@ -473,7 +496,7 @@ export default function App() {
       starting.current = false;
       setSettling(false);
     }
-  }, [nullifier, payout, picked, building, draft]);
+  }, [nullifier, payout, picked, building, draft, geoLock, timeLock]);
 
   const submit = useCallback(
     async (item: Item, file: File) => {
@@ -651,11 +674,11 @@ export default function App() {
                     <button className="draft-x" onClick={() => setDraft(draft.filter((_, j) => j !== i))}>✕</button>
                   )}
                 </div>
-                <input className="addr" placeholder="item name — e.g. booth banner" value={d.name}
+                <input className="addr" placeholder="item name — e.g. handwritten note" value={d.name}
                   onChange={(e) => setDraft(draft.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-                <input className="addr" placeholder="what the AI verifies — e.g. sponsor banner hung, undamaged" value={d.desc}
+                <input className="addr" placeholder='what the AI verifies — e.g. paper note reading "AIVY WAS HERE"' value={d.desc}
                   onChange={(e) => setDraft(draft.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x)))} />
-                <input className="addr" placeholder="liveness challenge — e.g. hold two fingers next to the logo" value={d.nonce}
+                <input className="addr" placeholder="liveness challenge — e.g. hold the note next to the green lamp" value={d.nonce}
                   onChange={(e) => setDraft(draft.map((x, j) => (j === i ? { ...x, nonce: e.target.value } : x)))} />
               </div>
             ))}
@@ -676,10 +699,29 @@ export default function App() {
             )}
             {/* the builder opens the same escrow as a template, so it owes the
                 same ~10s of narration — this path was left inert */}
+            <div className="locks">
+              <label className="lock">
+                <input type="checkbox" checked={geoLock} onChange={(e) => setGeoLock(e.target.checked)} />
+                <span className="lock-box" />
+                <span className="lock-text"><b>📍 GEO-LOCK</b><i>GPS sealed into every capture — proves WHERE</i></span>
+              </label>
+              <label className="lock">
+                <input type="checkbox" checked={timeLock > 0} onChange={(e) => setTimeLock(e.target.checked ? 15 : 0)} />
+                <span className="lock-box" />
+                <span className="lock-text"><b>⏱ TIME LOCK</b><i>evidence window enforced on-chain — proves WHEN</i></span>
+              </label>
+              {timeLock > 0 && (
+                <div className="lock-mins">
+                  {[15, 30, 60].map((m) => (
+                    <button key={m} className={timeLock === m ? "on" : ""} onClick={() => setTimeLock(m)}>{m} MIN</button>
+                  ))}
+                </div>
+              )}
+            </div>
             {settling ? (
               <SettlementTicker items={draft.length} />
             ) : (
-              <button className="cta" onClick={start}>ESCROW &amp; BEGIN</button>
+                          <button className="cta" onClick={start}>ESCROW &amp; BEGIN</button>
             )}
           </section>
         )}
@@ -717,10 +759,29 @@ export default function App() {
                 </p>
               </div>
             )}
+            <div className="locks">
+              <label className="lock">
+                <input type="checkbox" checked={geoLock} onChange={(e) => setGeoLock(e.target.checked)} />
+                <span className="lock-box" />
+                <span className="lock-text"><b>📍 GEO-LOCK</b><i>GPS sealed into every capture — proves WHERE</i></span>
+              </label>
+              <label className="lock">
+                <input type="checkbox" checked={timeLock > 0} onChange={(e) => setTimeLock(e.target.checked ? 15 : 0)} />
+                <span className="lock-box" />
+                <span className="lock-text"><b>⏱ TIME LOCK</b><i>evidence window enforced on-chain — proves WHEN</i></span>
+              </label>
+              {timeLock > 0 && (
+                <div className="lock-mins">
+                  {[15, 30, 60].map((m) => (
+                    <button key={m} className={timeLock === m ? "on" : ""} onClick={() => setTimeLock(m)}>{m} MIN</button>
+                  ))}
+                </div>
+              )}
+            </div>
             {settling ? (
               <SettlementTicker items={building ? draft.length : picked?.itemCount ?? 3} />
             ) : (
-              <button className="cta" onClick={start}>BEGIN CHECKOUT</button>
+                          <button className="cta" onClick={start}>BEGIN CHECKOUT</button>
             )}
           </section>
         )}
@@ -731,7 +792,11 @@ export default function App() {
             <section className={`casebar reveal ${released ? "done" : ""}`}>
               <div className="casebar-left">
                 <span className="case-no">{checkout.templateIcon} {checkout.template.toUpperCase()} · CASE Nº {checkout.checkoutId}</span>
-                <span className="case-amt">{checkout.depositHbar.toFixed(0)} ℏ IN ESCROW</span>
+                <span className="case-amt">
+                  {checkout.depositHbar.toFixed(0)} ℏ IN ESCROW
+                  {checkout.geoLock && <b className="lockchip">📍 GEO</b>}
+                  {checkout.deadline && !released && <Countdown to={checkout.deadline} />}
+                </span>
               </div>
               <div className="casebar-right">
                 <div className="segs" aria-label={`${passedCount} of ${total} items sealed`}>

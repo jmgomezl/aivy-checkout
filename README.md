@@ -25,6 +25,28 @@ Built at **ETHGlobal Lisboa**.
 Every verdict on that site is a real signed transaction on Hedera testnet, and every
 receipt links to HashScan.
 
+## Deployments
+
+**Hedera testnet** — where the deposit is escrowed and released.
+
+| what | address |
+|---|---|
+| `CheckoutEscrow` | [`0x3516a9d9bb6cC6D1B565Ea228137DCB7FdddE269`](https://hashscan.io/testnet/contract/0x3516a9d9bb6cC6D1B565Ea228137DCB7FdddE269) |
+| Relayer / authorized verdict signer | [`0x44f7769bFB6E872f491CcF0B655Bee8c06A640a0`](https://hashscan.io/testnet/account/0x44f7769bFB6E872f491CcF0B655Bee8c06A640a0) |
+| HCS receipt topic | [`0.0.9736741`](https://hashscan.io/testnet/topic/0.0.9736741) |
+
+**0G Galileo testnet** (chain 16602) — where evidence is stored and inference is bought.
+
+| what | address |
+|---|---|
+| Our 0G account (funds the compute ledger and storage) | `0x44f7769bFB6E872f491CcF0B655Bee8c06A640a0` |
+| 0G Compute ledger contract | `0xE70830508dAc0A97e6c087c75f402f9Be669E406` |
+| 0G Compute inference serving contract | `0xa79F4c8311FF93C06b8CfB403690cc987c93F91E` |
+| Inference provider we acknowledged on-chain (`qwen/qwen2.5-omni-7b`) | `0xa48f01287233509FD694a22Bf840225062E67836` |
+
+`CheckoutEscrow` is ours. The 0G ledger and serving contracts are the network's — listed
+because our account holds a funded ledger there and each verdict is billed through them.
+
 ## Why it isn't just "upload a photo"
 
 Three properties have to hold at once, and each one is enforced somewhere different:
