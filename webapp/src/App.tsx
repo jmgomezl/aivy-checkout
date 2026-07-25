@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IDKitWidget, VerificationLevel, type ISuccessResult } from "@worldcoin/idkit";
 
 /**
- * Aivy Checkout — tenant mini app (Stage 4).
- * Flow: verify personhood (World ID / simulator) -> start checkout ->
- * per-item: read the liveness instruction, capture a photo, submit ->
- * AI verdict + on-chain tx per item -> all pass = deposit released.
- * Runs inside Telegram (WebApp SDK present) or any browser.
+ * Aivy Checkout — tenant mini app.
+ * Design language: "Evidence Lab" — dark forensic terminal; the finale is a
+ * cream PAPER RECEIPT that prints out of the dark UI. All pipeline logic is
+ * unchanged: verify personhood -> checkout -> per-item liveness capture ->
+ * AI verdict -> signed on-chain release -> HCS-sealed receipt.
  */
 
 type Item = { name: string; description: string; nonceInstruction: string; passed: boolean };
@@ -40,8 +40,6 @@ type EvidenceResult = {
 const tg = (window as any).Telegram?.WebApp;
 
 function useNullifier(): [string, (n: string) => void] {
-  // Simulator personhood: stable per device. Overridden by the real IDKit
-  // nullifier_hash after a successful World ID verification.
   const [n, setN] = useState(() => {
     const k = "aivy:nullifier";
     let v = localStorage.getItem(k);
@@ -74,31 +72,59 @@ function fileToDataUrl(f: File): Promise<string> {
   });
 }
 
-const ITEM_EMOJI: Record<string, string> = { espresso_machine: "☕", tv: "📺", bedroom_door: "🚪" };
+const ITEM_ICON: Record<string, string> = { espresso_machine: "☕", tv: "📺", bedroom_door: "🚪" };
+const PIPELINE = ["UPLOADING EVIDENCE", "HASHING → 0G STORAGE", "AI VISION ANALYZING", "SIGNING VERDICT", "SETTLING ON-CHAIN"];
 
+/** Rotating pipeline status while an item is being verified. */
+function PipelineTicker() {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((v) => (v + 1) % PIPELINE.length), 1600);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <span className="ticker">
+      <span className="scanbar" />
+      {PIPELINE[i]}
+      <span className="cursor">▌</span>
+    </span>
+  );
+}
 
-// ---------------------------------------------------------------------------
-// The Cryptographic Receipt — the invisible chain/AI actions as one artifact.
-// ---------------------------------------------------------------------------
 function explorerBase(network: string): string | null {
   if (network === "hedera-testnet") return "https://hashscan.io/testnet";
   if (network === "hedera-mainnet") return "https://hashscan.io/mainnet";
-  return null; // local dev chain — hashes shown, no explorer
+  return null;
 }
 
 function Hash({ value, href, chars = 14 }: { value: string; href?: string | null; chars?: number }) {
   const short = value.length > chars ? value.slice(0, chars) + "…" : value;
   return href ? (
-    <a className="hashlink mono" href={href} target="_blank" rel="noreferrer" title={value}>
+    <a className="hashlink" href={href} target="_blank" rel="noreferrer" title={value}>
       {short} ↗
     </a>
   ) : (
-    <span className="hashlink mono" title={value + " (local chain — explorer link appears on Hedera testnet)"}>
+    <span className="hashval" title={value + " (local chain — explorer links appear on Hedera)"}>
       {short}
     </span>
   );
 }
 
+/** Barcode built from the real tx hash bytes — decoration that is also data. */
+function HashBarcode({ hash }: { hash: string }) {
+  const bytes = (hash || "0x00").replace(/^0x/, "").slice(0, 48);
+  return (
+    <div className="barcode" aria-hidden>
+      {Array.from(bytes).map((c, i) => (
+        <span key={i} style={{ width: 1 + (parseInt(c, 16) % 4), opacity: 0.55 + (parseInt(c, 16) % 8) / 16 }} />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// THE PAPER RECEIPT — prints out of the dark UI on release.
+// ---------------------------------------------------------------------------
 function Receipt({
   checkout,
   results,
@@ -117,104 +143,77 @@ function Receipt({
     month: "long", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit", timeZoneName: "short",
   }).format(releasedAt);
-  const finalTx = Object.values(results).map((r) => r.txHash).filter(Boolean).pop();
+  const finalTx = Object.values(results).map((r) => r.txHash).filter(Boolean).pop() ?? "";
+  const seal = Object.values(results).map((r) => r.hcsSeal).filter(Boolean).pop();
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="receipt" onClick={(e) => e.stopPropagation()}>
-        <div className="receipt-head">
-          <div className="receipt-title">
-            ✅ CHECKOUT COMPLETE
-            <span className="receipt-sub">
-              Deposit of {checkout.depositHbar.toFixed(0)} ℏ released
-            </span>
-          </div>
-          <div className="receipt-time">{when}</div>
-        </div>
+      <div className="paper-wrap" onClick={(e) => e.stopPropagation()}>
+        <div className="printer-lip" />
+        <div className="paper">
+          <div className="perf perf-top" />
 
-        {checkout.items.map((item) => {
-          const r = results[item.name];
-          if (!r) return null;
-          const cidHref = r.evidenceUri.startsWith("http") || r.evidenceUri.startsWith("0g://gateway")
-            ? r.evidenceUri : null;
-          return (
-            <div className="receipt-block" key={item.name}>
-              <div className="receipt-block-title">
-                {ITEM_EMOJI[item.name] ?? "📦"} EVIDENCE — {item.name.replace(/_/g, " ")}
-              </div>
-              <div className="receipt-row">
-                {thumbs[item.name] && <img className="thumb" src={thumbs[item.name]} alt={item.name} />}
-                <div className="grow">
-                  <div className="kv">
-                    <span>{r.storageBackend === "0g" ? "0G Storage root" : "Evidence hash (0G pending)"}</span>
-                    <Hash value={r.storageBackend === "0g" ? r.evidenceUri.replace("0g://", "") : r.imageHash} href={cidHref} chars={18} />
-                  </div>
-                  <div className="kv">
-                    <span>AI verdict</span>
-                    <b className="passtext">PASS (undamaged, liveness nonce detected)</b>
-                  </div>
-                  <div className="kv">
-                    <span>Verifier signature</span>
-                    <Hash value={r.signature} chars={14} />
-                  </div>
-                  {r.txHash && (
-                    <div className="kv">
-                      <span>On-chain verdict tx</span>
-                      <Hash value={r.txHash} href={exp ? `${exp}/transaction/${r.txHash}` : null} />
-                    </div>
-                  )}
+          <header className="paper-head">
+            <div className="paper-brand">AIVY&nbsp;CHECKOUT</div>
+            <div className="paper-sub">CRYPTOGRAPHIC CHECKOUT RECEIPT · Nº {checkout.checkoutId}</div>
+            <div className="paper-time">{when}</div>
+            <div className="stamp">RELEASED · {checkout.depositHbar.toFixed(0)} ℏ</div>
+          </header>
+
+          <div className="paper-rule" />
+
+          {checkout.items.map((item, idx) => {
+            const r = results[item.name];
+            if (!r) return null;
+            const cidHref = r.evidenceUri.startsWith("http") ? r.evidenceUri : null;
+            return (
+              <section className="paper-item" key={item.name}>
+                <div className="paper-item-head">
+                  <span>{String(idx + 1).padStart(2, "0")} · {item.name.replace(/_/g, " ").toUpperCase()}</span>
+                  <span className="ink-pass">PASS ✓</span>
                 </div>
-              </div>
-            </div>
-          );
-        })}
+                <div className="paper-item-body">
+                  {thumbs[item.name] && <img className="paper-thumb" src={thumbs[item.name]} alt={item.name} />}
+                  <table className="paper-kv"><tbody>
+                    <tr><td>evidence</td><td><Hash value={r.storageBackend === "0g" ? r.evidenceUri.replace("0g://", "") : r.imageHash} href={cidHref} chars={16} /></td></tr>
+                    <tr><td>ai&nbsp;verdict</td><td>undamaged · nonce&nbsp;detected</td></tr>
+                    <tr><td>signature</td><td><Hash value={r.signature} chars={16} /></td></tr>
+                    {r.txHash && <tr><td>verdict&nbsp;tx</td><td><Hash value={r.txHash} href={exp ? `${exp}/transaction/${r.txHash}` : null} chars={16} /></td></tr>}
+                  </tbody></table>
+                </div>
+              </section>
+            );
+          })}
 
-        <div className="receipt-block">
-          <div className="receipt-block-title">⛓ SETTLEMENT</div>
-          <div className="kv">
-            <span>Hedera escrow contract</span>
-            <Hash value={checkout.escrow} href={exp ? `${exp}/contract/${checkout.escrow}` : null} />
-          </div>
-          {finalTx && (
-            <div className="kv">
-              <span>Release transaction</span>
-              <Hash value={finalTx} href={exp ? `${exp}/transaction/${finalTx}` : null} />
-            </div>
-          )}
-          <div className="kv">
-            <span>HCS receipt topic</span>
-            {checkout.hcsTopic ? (
-              <Hash value={checkout.hcsTopic} href={exp ? `${exp}/topic/${checkout.hcsTopic}` : null} chars={20} />
-            ) : (
-              <span className="mono muted tiny">pending — set HCS_TOPIC_ID</span>
-            )}
-          </div>
-          {(() => {
-            const seal = Object.values(results).map((r) => r.hcsSeal).filter(Boolean).pop();
-            return seal ? (
-              <div className="kv">
-                <span>Receipt sealed</span>
-                <b className="passtext">✓ consensus seq #{seal.sequence}</b>
-              </div>
-            ) : null;
-          })()}
-          <div className="kv">
-            <span>Paid to</span>
-            <Hash value={checkout.tenant} href={exp ? `${exp}/account/${checkout.tenant}` : null} />
-          </div>
+          <div className="paper-rule" />
+
+          <section className="paper-settle">
+            <div className="paper-item-head"><span>SETTLEMENT</span><span>HEDERA {checkout.network === "hedera-testnet" ? "TESTNET" : ""}</span></div>
+            <table className="paper-kv wide"><tbody>
+              <tr><td>escrow</td><td><Hash value={checkout.escrow} href={exp ? `${exp}/contract/${checkout.escrow}` : null} chars={20} /></td></tr>
+              {finalTx && <tr><td>release&nbsp;tx</td><td><Hash value={finalTx} href={exp ? `${exp}/transaction/${finalTx}` : null} chars={20} /></td></tr>}
+              <tr><td>paid&nbsp;to</td><td><Hash value={checkout.tenant} href={exp ? `${exp}/account/${checkout.tenant}` : null} chars={20} /></td></tr>
+              <tr><td>hcs&nbsp;topic</td><td>{checkout.hcsTopic
+                ? <Hash value={checkout.hcsTopic + (seal ? ` · seq #${seal.sequence}` : "")} href={exp ? `${exp}/topic/${checkout.hcsTopic}` : null} chars={26} />
+                : <span className="hashval">pending — set HCS_TOPIC_ID</span>}</td></tr>
+            </tbody></table>
+          </section>
+
+          <HashBarcode hash={finalTx} />
+          <p className="paper-foot">
+            EVERY LINE INDEPENDENTLY VERIFIABLE · EVIDENCE HASH COMMITTED IN SIGNED VERDICT ·
+            SIGNATURE CHECKED BY CONTRACT (ECRECOVER) BEFORE FUNDS MOVED · SEALED TO HEDERA CONSENSUS
+          </p>
+
+          <div className="perf perf-bottom" />
         </div>
-
-        <p className="tiny muted center receipt-foot">
-          Every field above is independently verifiable: the evidence hash is committed in the
-          verdict the verifier signed, the contract checked that signature with ecrecover before
-          releasing funds, and the receipt is sealed to Hedera Consensus Service.
-        </p>
-        <button className="primary" onClick={onClose}>Close</button>
+        <button className="tear" onClick={onClose}>TEAR OFF ✂ CLOSE</button>
       </div>
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
 export default function App() {
   const [nullifier, setNullifier] = useNullifier();
   const [verified, setVerified] = useState(false);
@@ -226,12 +225,13 @@ export default function App() {
   const [releasedAt, setReleasedAt] = useState<Date | null>(null);
   const [payout, setPayout] = useState<string>(() => localStorage.getItem("aivy:payout") ?? "");
   const [error, setError] = useState<string>("");
-  const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string } | null>(null);
+  const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string } | null>(null);
+  const starting = useRef(false);
 
   useEffect(() => {
     tg?.ready?.();
     tg?.expand?.();
-    api<{ worldId: string; worldAppId?: string; worldAction?: string }>("/api/health").then(setHealth).catch(() => {});
+    api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string }>("/api/health").then(setHealth).catch(() => {});
   }, []);
 
   const verify = useCallback(async () => {
@@ -245,8 +245,6 @@ export default function App() {
     }
   }, [nullifier]);
 
-  // Real World ID: IDKit hands us the ZK proof; the server verifies it with
-  // the Developer Portal and from then on the nullifier_hash is our identity.
   const onWorldIdSuccess = useCallback(async (proof: ISuccessResult) => {
     setError("");
     try {
@@ -261,6 +259,8 @@ export default function App() {
   }, [setNullifier]);
 
   const start = useCallback(async () => {
+    if (starting.current) return;
+    starting.current = true;
     setError("");
     try {
       const addr = payout.trim();
@@ -268,6 +268,8 @@ export default function App() {
       setCheckout(await api<Checkout>("/api/demo/checkout", { nullifier, tenantAddress: addr || undefined }));
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      starting.current = false;
     }
   }, [nullifier, payout]);
 
@@ -302,168 +304,184 @@ export default function App() {
 
   const released = checkout?.status === "Released";
   const passedCount = checkout?.items.filter((i) => i.passed).length ?? 0;
+  const total = checkout?.items.length ?? 0;
 
   return (
-    <div className="wrap">
-      <header>
-        <div className="logo">🔍 Aivy Checkout</div>
-        <div className="tag">AI-verified checkout receipts on Hedera · 0G · World ID</div>
-      </header>
-
-      {!verified && (
-        <section className="card center">
-          <h2>Prove you're a unique human</h2>
-          <p className="muted">
-            One human, one checkout. Your World ID nullifier is the sybil-resistance key — no
-            documents, no doxxing.
-          </p>
-          {health?.worldAppId ? (
-            <IDKitWidget
-              app_id={health.worldAppId as `app_${string}`}
-              action={health.worldAction ?? "aivy-checkout"}
-              verification_level={VerificationLevel.Device}
-              onSuccess={onWorldIdSuccess}
-            >
-              {({ open }) => (
-                <button className="primary" onClick={open}>
-                  🌐 Verify with World ID
-                </button>
-              )}
-            </IDKitWidget>
-          ) : (
-            <>
-              <button className="primary" onClick={verify}>
-                Verify (World ID Simulator)
-              </button>
-              <p className="tiny muted">Simulator mode — set WORLD_APP_ID server-side to go live.</p>
-            </>
-          )}
-        </section>
-      )}
-
-      {verified && !checkout && (
-        <section className="card center">
-          <h2>✅ Human verified</h2>
-          <p className="muted">
-            Start your apartment checkout. The host escrowed your deposit on-chain; pass every
-            checklist item and it releases to you <b>instantly</b>.
-          </p>
-          <div className="payout">
-            <label className="tiny muted" htmlFor="payout">
-              Payout wallet — your <b>OculusVault</b> address (optional)
-            </label>
-            <input
-              id="payout"
-              className="addr mono"
-              placeholder="0x… leave empty for a demo wallet"
-              value={payout}
-              onChange={(e) => setPayout(e.target.value)}
-              spellCheck={false}
-              autoComplete="off"
-            />
-            <p className="tiny muted">
-              Don&apos;t have one?{" "}
-              <a className="hashlink" href="https://t.me/oculusvaultbot/app" target="_blank" rel="noreferrer">
-                Open OculusVault ↗
-              </a>{" "}
-              — copy your EVM address and the deposit pays out straight to your wallet.
-            </p>
+    <div className="stage">
+      <div className="grain" aria-hidden />
+      <div className="wrap">
+        <header className="mast reveal">
+          <div className="mast-row">
+            <span className="mast-dot" />
+            <span className="mast-proto">PROOF-OF-CHECKOUT PROTOCOL</span>
+            <span className="mast-net">{health?.network === "hedera-testnet" ? "HEDERA·TESTNET" : health?.network === "hedera-mainnet" ? "HEDERA" : "LOCAL·CHAIN"}</span>
           </div>
-          <button className="primary" onClick={start}>
-            Start checkout
-          </button>
-        </section>
-      )}
+          <h1 className="mast-brand">
+            AIVY<span className="brand-slash">/</span>CHECKOUT
+          </h1>
+          <div className="mast-tag">AI verifies the evidence · the chain moves the money · you keep the receipt</div>
+        </header>
 
-      {checkout && (
-        <>
-          <section className={`card status ${released ? "ok" : ""}`}>
-            <div>
-              <b>Checkout #{checkout.checkoutId}</b> · deposit{" "}
-              {checkout.depositHbar.toFixed(0)} ℏ · {passedCount}/{checkout.items.length}{" "}
-              items
+        {/* ─── GATE: personhood ─────────────────────────────────────── */}
+        {!verified && (
+          <section className="panel gate reveal d1">
+            <div className="gate-ring">
+              <div className="gate-ring-inner">☝</div>
             </div>
-            <div className={`pill ${released ? "ok" : ""}`}>{checkout.status}</div>
+            <h2 className="panel-title">ONE HUMAN,<br />ONE CHECKOUT.</h2>
+            <p className="panel-copy">
+              Your World ID nullifier is the sybil-resistance key. No documents. No doxxing.
+              Just proof there's a unique human behind this deposit.
+            </p>
+            {health?.worldAppId ? (
+              <IDKitWidget
+                app_id={health.worldAppId as `app_${string}`}
+                action={health.worldAction ?? "aivy-checkout"}
+                verification_level={VerificationLevel.Device}
+                onSuccess={onWorldIdSuccess}
+              >
+                {({ open }) => (
+                  <button className="cta" onClick={open}>VERIFY WITH WORLD ID</button>
+                )}
+              </IDKitWidget>
+            ) : (
+              <>
+                <button className="cta" onClick={verify}>VERIFY PERSONHOOD</button>
+                <p className="fine">SIMULATOR MODE — set WORLD_APP_ID server-side to go live</p>
+              </>
+            )}
           </section>
+        )}
 
-          {released && (
-            <section className="card ok center">
-              <h2>🎉 Deposit released!</h2>
-              <p className="muted">
-                Every item passed AI verification. The escrow paid your wallet the moment the last
-                signed verdict landed on-chain.
+        {/* ─── BRIEFING: start checkout ─────────────────────────────── */}
+        {verified && !checkout && (
+          <section className="panel reveal d1">
+            <div className="verified-chip">✓ HUMAN VERIFIED · {nullifier.slice(0, 14)}…</div>
+            <h2 className="panel-title">YOUR DEPOSIT IS<br />IN ESCROW.</h2>
+            <p className="panel-copy">
+              The host locked it in a Hedera smart contract. Pass every checklist item and the
+              contract pays you back <em>the second</em> the last verdict lands. No host mood. No 30-day wait.
+            </p>
+            <div className="payout">
+              <label className="fine" htmlFor="payout">PAYOUT WALLET — YOUR OCULUSVAULT ADDRESS (OPTIONAL)</label>
+              <input
+                id="payout"
+                className="addr"
+                placeholder="0x…  leave empty for a demo wallet"
+                value={payout}
+                onChange={(e) => setPayout(e.target.value)}
+                spellCheck={false}
+                autoComplete="off"
+              />
+              <p className="fine">
+                No wallet? <a className="hashlink" href="https://t.me/oculusvaultbot/app" target="_blank" rel="noreferrer">OPEN OCULUSVAULT ↗</a> — the deposit pays straight into it.
               </p>
-              <p className="tiny mono">tenant: {checkout.tenant}</p>
-              <button className="primary" onClick={() => setShowReceipt(true)}>
-                🧾 View cryptographic receipt
-              </button>
-            </section>
-          )}
+            </div>
+            <button className="cta" onClick={start}>BEGIN CHECKOUT</button>
+          </section>
+        )}
 
-          {showReceipt && released && (
-            <Receipt
-              checkout={checkout}
-              results={results}
-              thumbs={thumbs}
-              releasedAt={releasedAt ?? new Date()}
-              onClose={() => setShowReceipt(false)}
-            />
-          )}
-
-          {checkout.items.map((item) => {
-            const r = results[item.name];
-            return (
-              <section key={item.name} className={`card item ${item.passed ? "ok" : r?.verdict === "FAIL" ? "bad" : ""}`}>
-                <div className="row">
-                  <div className="emoji">{ITEM_EMOJI[item.name] ?? "📦"}</div>
-                  <div className="grow">
-                    <b>{item.name.replace(/_/g, " ")}</b>
-                    <div className="muted tiny">{item.description}</div>
-                  </div>
-                  <div className="pill">{item.passed ? "PASSED ✓" : r?.verdict === "FAIL" ? "FAILED ✗" : "PENDING"}</div>
+        {/* ─── CASE FILE: the checklist ─────────────────────────────── */}
+        {checkout && (
+          <>
+            <section className={`casebar reveal ${released ? "done" : ""}`}>
+              <div className="casebar-left">
+                <span className="case-no">CASE Nº {checkout.checkoutId}</span>
+                <span className="case-amt">{checkout.depositHbar.toFixed(0)} ℏ IN ESCROW</span>
+              </div>
+              <div className="casebar-right">
+                <div className="segs" aria-label={`${passedCount} of ${total} items sealed`}>
+                  {checkout.items.map((it) => (
+                    <span key={it.name} className={`seg ${it.passed ? "on" : ""}`} />
+                  ))}
                 </div>
+                <span className={`case-status ${released ? "ok" : ""}`}>{released ? "RELEASED" : `${passedCount}/${total} SEALED`}</span>
+              </div>
+            </section>
 
-                {!item.passed && (
-                  <>
-                    <div className="nonce">
-                      🎲 Liveness challenge: <b>{item.nonceInstruction}</b>
-                    </div>
-                    <label className={`capture ${busyItem === item.name ? "busy" : ""}`}>
-                      {busyItem === item.name ? "⏳ storing → AI verifying → signing → on-chain…" : "📷 Capture evidence"}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        disabled={busyItem !== null}
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) submit(item, f);
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                  </>
-                )}
-
-                {r && (
-                  <div className="result tiny mono">
-                    <div>verdict: {r.verdict} ({r.brain}) — {r.reason}</div>
-                    <div>evidence: {r.imageHash.slice(0, 22)}… ({r.storageBackend})</div>
-                    {r.txHash && <div>tx: {r.txHash.slice(0, 22)}…</div>}
-                  </div>
-                )}
+            {released && (
+              <section className="panel released reveal">
+                <h2 className="panel-title glow">DEPOSIT<br />RELEASED.</h2>
+                <p className="panel-copy">Funds hit the payout wallet the moment the last signed verdict cleared the contract.</p>
+                <button className="cta" onClick={() => setShowReceipt(true)}>🧾 PRINT THE RECEIPT</button>
               </section>
-            );
-          })}
-        </>
-      )}
+            )}
 
-      {error && <div className="error">⚠ {error}</div>}
+            {checkout.items.map((item, idx) => {
+              const r = results[item.name];
+              const state = item.passed ? "pass" : r?.verdict === "FAIL" ? "fail" : "open";
+              return (
+                <section key={item.name} className={`evidence reveal d${idx + 1} ${state}`}>
+                  <div className="ev-rail">
+                    <span className="ev-no">{String(idx + 1).padStart(2, "0")}</span>
+                    <span className="ev-line" />
+                  </div>
+                  <div className="ev-body">
+                    <div className="ev-head">
+                      <span className="ev-icon">{ITEM_ICON[item.name] ?? "▣"}</span>
+                      <div className="ev-titles">
+                        <b>{item.name.replace(/_/g, " ").toUpperCase()}</b>
+                        <span className="ev-desc">{item.description}</span>
+                      </div>
+                      {state === "pass" && <span className="verdict-stamp pass">PASS</span>}
+                      {state === "fail" && <span className="verdict-stamp fail">FAIL</span>}
+                    </div>
 
-      <footer className="tiny muted center">
-        escrow: contract-verified verdicts (ecrecover) · evidence hashed on-chain · receipts sealed
-        to HCS
-      </footer>
+                    {!item.passed && (
+                      <>
+                        <div className="challenge">
+                          <span className="challenge-label">LIVENESS CHALLENGE</span>
+                          <span className="challenge-text">{item.nonceInstruction}</span>
+                        </div>
+                        <label className={`capture ${busyItem === item.name ? "busy" : ""}`}>
+                          {busyItem === item.name ? <PipelineTicker /> : <span>◉&nbsp;&nbsp;CAPTURE EVIDENCE</span>}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            disabled={busyItem !== null}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) submit(item, f);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                      </>
+                    )}
+
+                    {r && (
+                      <div className="ev-result">
+                        <div className="ev-kv"><span>ai&nbsp;verdict</span><span className={r.verdict === "PASS" ? "ink-lime" : "ink-red"}>{r.verdict} · {r.brain}</span></div>
+                        <div className="ev-kv"><span>reason</span><span>{r.reason}</span></div>
+                        <div className="ev-kv"><span>evidence</span><span>{r.imageHash.slice(0, 18)}… ({r.storageBackend})</span></div>
+                        {r.txHash && <div className="ev-kv"><span>tx</span><span>{r.txHash.slice(0, 18)}…</span></div>}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              );
+            })}
+          </>
+        )}
+
+        {showReceipt && released && checkout && (
+          <Receipt
+            checkout={checkout}
+            results={results}
+            thumbs={thumbs}
+            releasedAt={releasedAt ?? new Date()}
+            onClose={() => setShowReceipt(false)}
+          />
+        )}
+
+        {error && <div className="errorbar reveal">⚠ {error}</div>}
+
+        <footer className="colophon">
+          ECRECOVER-VERIFIED VERDICTS · EVIDENCE HASHED ON-CHAIN · RECEIPTS SEALED TO HCS
+          <br />HEDERA × 0G × WORLD ID — ETHGLOBAL LISBOA
+        </footer>
+      </div>
     </div>
   );
 }
