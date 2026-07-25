@@ -76,8 +76,9 @@ function fileToDataUrl(f: File): Promise<string> {
 }
 
 const ITEM_ICON: Record<string, string> = {
-  espresso_machine: "☕", tv: "📺", bedroom_door: "🚪",
+  espresso_machine: "☕", chair: "🪑", bedroom_door: "🚪",
   front_bumper: "🚗", driver_side: "🪞", dashboard: "🎛",
+  scooter_deck: "🛴", brake_lever: "🖐", battery_readout: "🔋",
   parcel_intact: "📦", label_visible: "🏷", product_facing: "🛒",
   price_tag: "💶", shelf_context: "🗄",
 };

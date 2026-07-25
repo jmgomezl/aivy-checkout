@@ -58,8 +58,11 @@ const TEMPLATES: Template[] = [
     blurb: "Tenant proves the place is fine; deposit releases itself.",
     icon: "🏠",
     items: [
-      { name: "espresso_machine", desc: "espresso machine on the kitchen counter, undamaged", nonce: "place a blue pen next to the espresso machine" },
-      { name: "tv", desc: "living room TV with intact screen", nonce: "hold two fingers in front of the tv screen" },
+      // Nonces have to be stageable with props that are actually to hand and
+      // unambiguous to a vision model. Fingers held against a screen read as
+      // noise; a pen lying on a surface reads as a placed object.
+      { name: "espresso_machine", desc: "espresso machine on the kitchen counter, undamaged", nonce: "place a yellow pen next to the espresso machine" },
+      { name: "chair", desc: "chair with an intact seat and backrest, no cracks or wobbling legs", nonce: "lay a yellow pen across the seat of the chair" },
       { name: "bedroom_door", desc: "bedroom door with no holes or dents", nonce: "press an open palm flat on the bedroom door" },
     ],
   },
@@ -73,6 +76,18 @@ const TEMPLATES: Template[] = [
       { name: "front_bumper", desc: "front bumper and hood, no dents or scratches", nonce: "hold your open palm on the hood while shooting the bumper" },
       { name: "driver_side", desc: "driver-side panels and mirror intact", nonce: "point at the side mirror with one finger" },
       { name: "dashboard", desc: "dashboard showing fuel level and odometer, no warning lights", nonce: "hold two fingers beside the odometer" },
+    ],
+  },
+  {
+    id: "scooter_return",
+    title: "Scooter Return",
+    payer: "micromobility fleets & insurers",
+    blurb: "Rider proves the scooter came back whole, braking, and charged.",
+    icon: "🛴",
+    items: [
+      { name: "scooter_deck", desc: "scooter deck and stem upright, no cracks or bends", nonce: "rest one open palm flat on the middle of the deck" },
+      { name: "brake_lever", desc: "brake lever on the handlebar, intact and attached", nonce: "squeeze the brake lever with your hand visible in frame" },
+      { name: "battery_readout", desc: "powered-on dashboard showing the battery level", nonce: "point at the lit battery readout with one finger" },
     ],
   },
   {
