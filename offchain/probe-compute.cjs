@@ -56,7 +56,8 @@ const IMAGE = process.argv[3] || null;
     const j = JSON.parse(text);
     const answer = j.choices?.[0]?.message?.content;
     console.log(`[${label}] answer:`, String(answer).slice(0, 300));
-    const valid = await broker.inference.processResponse(PROVIDER, j.id, String(answer));
+    const resKey = res.headers.get("zg-res-key") || j.id; // header, NOT chat id (see compute-0g.ts)
+    const valid = await broker.inference.processResponse(PROVIDER, resKey, String(answer));
     console.log(`[${label}] TEE verified:`, valid);
     return answer;
   }

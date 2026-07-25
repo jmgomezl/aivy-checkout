@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IDKitWidget, VerificationLevel, type ISuccessResult } from "@worldcoin/idkit";
+// World ID 4.0 (branch: world-selfie-v4) — request-widget + backend-signed
+// rp_context. Selfie Check preset is the whole point of this branch.
+import { IDKitRequestWidget, deviceLegacy, proofOfHuman, selfieCheckLegacy, type RpContext } from "@worldcoin/idkit";
 
 /**
  * Aivy Checkout — tenant mini app.
@@ -35,6 +37,8 @@ type EvidenceResult = {
   evidenceUri: string;
   storageRoot?: string | null;
   geo?: { lat: number; lng: number; acc?: number | null } | null;
+  teeVerified?: boolean | null;
+  computeModel?: string | null;
   signature: string;
   verifier: string;
   txHash?: string;
@@ -329,6 +333,9 @@ function Receipt({
                   <table className="paper-kv"><tbody>
                     <tr><td>{r.storageBackend === "0g" ? <>0g&nbsp;root</> : "evidence"}</td><td><Hash value={r.storageRoot ?? r.imageHash} href={cidHref} chars={16} /></td></tr>
                     <tr><td>ai&nbsp;verdict</td><td>undamaged · nonce&nbsp;detected</td></tr>
+                    <tr><td>verifier</td><td>{r.brain === "0g-compute"
+                      ? <>0G&nbsp;COMPUTE · {(r.computeModel ?? "").replace("qwen/", "")}{r.teeVerified ? <b className="ink-pass"> · TEE&nbsp;SIG&nbsp;✓</b> : " · sig unverified"}</>
+                      : r.brain === "openai" ? "GPT VISION (fallback)" : r.brain}</td></tr>
                     <tr><td>signature</td><td><Hash value={r.signature} chars={16} /></td></tr>
                     {r.txHash && <tr><td>verdict&nbsp;tx</td><td><Hash value={r.txHash} href={exp ? `${exp}/transaction/${r.txHash}` : null} chars={16} /></td></tr>}
                     {r.geo && <tr><td>geo</td><td>{r.geo.lat.toFixed(5)}, {r.geo.lng.toFixed(5)} (±{r.geo.acc ?? "?"}m)</td></tr>}
@@ -385,13 +392,14 @@ export default function App() {
   const [releasedAt, setReleasedAt] = useState<Date | null>(null);
   const [payout, setPayout] = useState<string>(() => localStorage.getItem("aivy:payout") ?? "");
   const [error, setError] = useState<string>("");
-  const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null } | null>(null);
+  const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null; worldRpId?: string | null; computeEnabled?: boolean } | null>(null);
   const [templates, setTemplates] = useState<TemplateCard[]>([]);
   const [archive, setArchive] = useState<Archived[]>([]);
   const [picked, setPicked] = useState<TemplateCard | null>(null);
   const [building, setBuilding] = useState(false);
   const [draft, setDraft] = useState<DraftItem[]>([{ name: "", desc: "", nonce: "" }]);
   const [geoLock, setGeoLock] = useState(false);
+  const [brain, setBrain] = useState<"0g-compute" | "openai">("0g-compute");
   const [tier, setTier] = useState<"device" | "selfie" | "orb">("device");
   const [capHbar, setCapHbar] = useState(2);
   const [selfieEnabled, setSelfieEnabled] = useState(false);
@@ -408,7 +416,7 @@ export default function App() {
     // the viewer's own theme and a light-mode judge gets a white header band
     tg?.setHeaderColor?.("#07090d");
     tg?.setBackgroundColor?.("#07090d");
-    api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null }>("/api/health").then(setHealth).catch(() => {});
+    api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null; worldRpId?: string | null; computeEnabled?: boolean }>("/api/health").then(setHealth).catch(() => {});
     api<{ templates: TemplateCard[] }>("/api/templates").then((t) => setTemplates(t.templates)).catch(() => {});
     loadArchive();
   }, []);
@@ -417,6 +425,52 @@ export default function App() {
   const loadArchive = useCallback(() => {
     api<{ receipts: Archived[] }>("/api/history").then((h) => setArchive(h.receipts ?? [])).catch(() => {});
   }, []);
+
+  // ── World ID 4.0 plumbing ─────────────────────────────────────────
+  const [worldOpen, setWorldOpen] = useState(false);
+  const [worldKind, setWorldKind] = useState<"gate" | "orb" | "selfie">("gate");
+  const [rpContext, setRpContext] = useState<RpContext | null>(null);
+  const worldResult = useRef<any>(null);
+
+  const startWorld = useCallback(async (kind: "gate" | "orb" | "selfie") => {
+    setError("");
+    if (!health?.worldRpId) {
+      setError("World ID 4.0 not configured yet — set WORLD_RP_ID / WORLD_RP_SIGNING_KEY (opens with Selfie beta access)");
+      return;
+    }
+    try {
+      const sig = await api<any>("/api/world/rp-signature", { action: health.worldAction ?? "aivy-checkout" });
+      setRpContext({
+        rp_id: sig.rp_id,
+        nonce: sig.nonce,
+        created_at: sig.created_at,
+        expires_at: sig.expires_at,
+        signature: sig.sig,
+      } as RpContext);
+      setWorldKind(kind);
+      setWorldOpen(true);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }, [health]);
+
+  const worldPreset =
+    worldKind === "selfie" ? selfieCheckLegacy({ signal: "aivy-checkout" }) :
+    worldKind === "orb" ? proofOfHuman({ signal: "aivy-checkout" }) :
+    deviceLegacy({ signal: "aivy-checkout" });
+
+  const applyWorldSession = useCallback((out: any) => {
+    if (out?.linkedWallet && !payout) setPayout(out.linkedWallet);
+    if (out?.tier) { setTier(out.tier); setCapHbar(out.capHbar ?? 2); setSelfieEnabled(!!out.selfieEnabled); }
+    if (out?.nullifier) {
+      setNullifier(out.nullifier);
+      localStorage.setItem("aivy:nullifier", out.nullifier);
+    }
+    localStorage.setItem("aivy:verified", "1");
+    setVerified(true);
+    setStepUp(null);
+    tg?.HapticFeedback?.notificationOccurred?.("success");
+  }, [payout, setNullifier]);
 
   const verify = useCallback(async () => {
     setError("");
@@ -432,22 +486,13 @@ export default function App() {
     }
   }, [nullifier]);
 
-  const onWorldIdSuccess = useCallback(async (proof: ISuccessResult) => {
-    setError("");
-    try {
-      const out = await api<{ ok: boolean; nullifier: string; linkedWallet?: string | null; tier?: any; capHbar?: number; selfieEnabled?: boolean }>("/api/verify-human", { proof });
-      if (out.linkedWallet && !payout) setPayout(out.linkedWallet);
-      if (out.tier) { setTier(out.tier); setCapHbar(out.capHbar ?? 2); setSelfieEnabled(!!out.selfieEnabled); }
-      setNullifier(out.nullifier);
-      localStorage.setItem("aivy:nullifier", out.nullifier);
-      setVerified(true);
-      setStepUp(null);
-      localStorage.setItem("aivy:verified", "1");
-      tg?.HapticFeedback?.notificationOccurred?.("success");
-    } catch (e: any) {
-      setError("World ID verification failed: " + e.message);
-    }
-  }, [setNullifier, payout]);
+  // v4: handleVerify runs while the widget is open; the server forwards the
+  // idkit response to /api/v4/verify/{rp_id} and returns our session (tier,
+  // nullifier, cap). onSuccess then applies it via applyWorldSession.
+  const handleWorldVerify = useCallback(async (result: unknown) => {
+    const out = await api<any>("/api/world/verify-v4", { idkitResponse: result });
+    worldResult.current = out;
+  }, [worldKind]);
 
   /**
    * Practice runs need a way out that isn't "close the Mini App". Clearing the
@@ -488,7 +533,7 @@ export default function App() {
     try {
       const addr = payout.trim();
       if (addr) localStorage.setItem("aivy:payout", addr);
-      const payload: any = { nullifier, tenantAddress: addr || undefined, geoLock, timeLockMinutes: timeLock || 30 };
+      const payload: any = { nullifier, tenantAddress: addr || undefined, geoLock, timeLockMinutes: timeLock || 30, brain: health?.computeEnabled ? brain : "openai" };
       if (wantFresh.current) {
         payload.fresh = true;
         wantFresh.current = false;
@@ -497,13 +542,19 @@ export default function App() {
       else if (picked) payload.templateId = picked.id;
       setCheckout(await api<Checkout>("/api/demo/checkout", payload));
     } catch (e: any) {
-      if (/personhood/i.test(e.message)) dropVerification();
+      const gate = /^TIER_GATE:(selfie|orb):(.*)$/.exec(e.message ?? "");
+      if (gate) {
+        setStepUp(gate[1] as "selfie" | "orb");
+        setError(gate[2]);
+        setPicked(null); // back to the hub, where the step-up panel renders
+        setBuilding(false);
+      } else if (/personhood/i.test(e.message)) dropVerification();
       else setError(e.message);
     } finally {
       starting.current = false;
       setSettling(false);
     }
-  }, [nullifier, payout, picked, building, draft, geoLock, timeLock]);
+  }, [nullifier, payout, picked, building, draft, geoLock, timeLock, brain, health]);
 
   const submit = useCallback(
     async (item: Item, file: File) => {
@@ -570,16 +621,7 @@ export default function App() {
               Just proof there's a unique human behind this deposit.
             </p>
             {health?.worldAppId ? (
-              <IDKitWidget
-                app_id={health.worldAppId as `app_${string}`}
-                action={health.worldAction ?? "aivy-checkout"}
-                verification_level={VerificationLevel.Device}
-                onSuccess={onWorldIdSuccess}
-              >
-                {({ open }) => (
-                  <button className="cta" onClick={open}>VERIFY WITH WORLD ID</button>
-                )}
-              </IDKitWidget>
+              <button className="cta" onClick={() => startWorld("gate")}>VERIFY WITH WORLD ID</button>
             ) : (
               <>
                 <button className="cta" onClick={verify}>VERIFY PERSONHOOD</button>
@@ -620,19 +662,12 @@ export default function App() {
                   </p>
                   <div className="stepup-actions">
                     {selfieEnabled ? (
-                      <button className="cta" onClick={() => setError("Selfie Check flow: wire IDKit v4 preset here (enabled)")}>🤳 SELFIE CHECK</button>
+                      <button className="cta" onClick={() => startWorld("selfie")}>🤳 SELFIE CHECK</button>
                     ) : (
                       <button className="cta ghost" disabled>🤳 SELFIE CHECK — BETA OPENS THIS WEEKEND</button>
                     )}
                     {health?.worldAppId && (
-                      <IDKitWidget
-                        app_id={health.worldAppId as `app_${string}`}
-                        action={health.worldAction ?? "aivy-checkout"}
-                        verification_level={VerificationLevel.Orb}
-                        onSuccess={onWorldIdSuccess}
-                      >
-                        {({ open }) => <button className="cta" onClick={open}>⚪ VERIFY WITH ORB</button>}
-                      </IDKitWidget>
+                      <button className="cta" onClick={() => startWorld("orb")}>⚪ VERIFY WITH ORB</button>
                     )}
                   </div>
                 </div>
@@ -753,6 +788,15 @@ export default function App() {
                   ))}
                 </div>
               )}
+              {health?.computeEnabled && (
+                <div className="brainsel">
+                  <span className="lock-text"><b>🧠 VERIFIER</b><i>who judges your evidence</i></span>
+                  <div className="lock-mins brain-mins">
+                    <button className={brain === "0g-compute" ? "on" : ""} onClick={() => setBrain("0g-compute")}>0G TEE · VERIFIABLE</button>
+                    <button className={brain === "openai" ? "on" : ""} onClick={() => setBrain("openai")}>GPT · FRONTIER</button>
+                  </div>
+                </div>
+              )}
             </div>
             {settling ? (
               <SettlementTicker items={draft.length} />
@@ -811,6 +855,15 @@ export default function App() {
                   {[15, 30, 60].map((m) => (
                     <button key={m} className={timeLock === m ? "on" : ""} onClick={() => setTimeLock(m)}>{m} MIN</button>
                   ))}
+                </div>
+              )}
+              {health?.computeEnabled && (
+                <div className="brainsel">
+                  <span className="lock-text"><b>🧠 VERIFIER</b><i>who judges your evidence</i></span>
+                  <div className="lock-mins brain-mins">
+                    <button className={brain === "0g-compute" ? "on" : ""} onClick={() => setBrain("0g-compute")}>0G TEE · VERIFIABLE</button>
+                    <button className={brain === "openai" ? "on" : ""} onClick={() => setBrain("openai")}>GPT · FRONTIER</button>
+                  </div>
                 </div>
               )}
             </div>
@@ -904,7 +957,7 @@ export default function App() {
 
                     {r && (
                       <div className="ev-result">
-                        <div className="ev-kv"><span>ai&nbsp;verdict</span><span className={r.verdict === "PASS" ? "ink-lime" : "ink-red"}>{r.verdict} · {r.brain}</span></div>
+                        <div className="ev-kv"><span>ai&nbsp;verdict</span><span className={r.verdict === "PASS" ? "ink-lime" : "ink-red"}>{r.verdict} · {r.brain}{r.brain === "0g-compute" && r.teeVerified ? " · TEE ✓" : ""}</span></div>
                         <div className="ev-kv"><span>reason</span><span>{r.reason}</span></div>
                         <div className="ev-kv"><span>evidence</span><span>{r.imageHash.slice(0, 18)}… · {STORAGE_LABEL[r.storageBackend] ?? r.storageBackend}</span></div>
                         {r.txHash && <div className="ev-kv"><span>tx</span><span>{r.txHash.slice(0, 18)}…</span></div>}
@@ -915,6 +968,23 @@ export default function App() {
               );
             })}
           </>
+        )}
+
+        {health?.worldAppId && health?.worldRpId && rpContext && (
+          <IDKitRequestWidget
+            open={worldOpen}
+            onOpenChange={setWorldOpen}
+            app_id={health.worldAppId as `app_${string}`}
+            action={health.worldAction ?? "aivy-checkout"}
+            rp_context={rpContext}
+            allow_legacy_proofs={true}
+            preset={worldPreset}
+            handleVerify={handleWorldVerify}
+            onSuccess={() => {
+              setWorldOpen(false);
+              if (worldResult.current) applyWorldSession(worldResult.current);
+            }}
+          />
         )}
 
         {showReceipt && released && checkout && (

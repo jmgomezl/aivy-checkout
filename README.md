@@ -1,29 +1,208 @@
-# Aivy Checkout
+# Aivy Inspect
 
-**Verifiable inspection receipts for the physical world — an AI judges the evidence, the chain moves the money.**
+**Verifiable inspection receipts for the physical world — an AI judges the evidence, the chain moves the money, and a human is provably behind every photo.**
 
-A tenant wants their deposit back. The host defines an itemized checklist. The tenant
-submits fresh photo evidence per item, and every item carries a **per-item liveness
-nonce** — committed on-chain *before* the photo is taken — so an old or reused photo
-fails. An adversarial AI verifier signs an **itemized verdict**. The moment the last
-required item passes, the Hedera escrow releases the deposit to the tenant with no
-counterparty in the loop. If items fail or the deadline passes, the host resolves.
-Receipts are sealed to HCS; evidence blobs go to 0G Storage.
+AI can analyze evidence perfectly, but it cannot walk to the apartment. Every deposit
+dispute on Earth is two people, two photos, zero proof. Aivy closes that gap: a
+**verified unique human** captures evidence against a **liveness challenge committed
+on-chain before the photo exists**, a **verifiable AI** signs an itemized verdict, and
+an **escrow releases the money the instant the last item passes** — no counterparty in
+the loop, and a receipt anyone can audit forever.
 
-Built at **ETHGlobal Lisboa**.
+Built solo at **ETHGlobal Lisboa** · Hedera × World × 0G
 
-## Live
+---
 
-| | |
+## ⏱ The 90-second judge tour
+
+1. Open **https://checkout.aivylabs.xyz** → verify with World ID (real, v4)
+2. Pick **Rental Checkout** → your 2 ℏ deposit escrows on Hedera testnet in front of you
+3. Follow a liveness challenge (*"place the yellow plush toy on the chair"*) → shoot → watch: `hash → 0G Storage → AI verdict → signed → ecrecover on-chain`
+4. Pass every item → **the deposit pays out in the same transaction** → a paper receipt prints with clickable HashScan links, the 0G storage root, and the verified-inference line
+5. Try to cheat (wrong object, reused photo) → signed **FAIL** verdict lands on-chain → **funds stay locked**
+
+| Live | |
 |---|---|
-| Web | **https://checkout.aivylabs.xyz** |
+| Web app | **https://checkout.aivylabs.xyz** |
 | Telegram Mini App | **https://t.me/aivycheckout_bot** |
-| Chain | Hedera testnet — escrow [`0x83B55906c6359c3f43Bf95cb8Cdef4455DB68226`](https://hashscan.io/testnet/contract/0x83B55906c6359c3f43Bf95cb8Cdef4455DB68226) |
-| HCS receipts | topic [`0.0.9736741`](https://hashscan.io/testnet/topic/0.0.9736741) |
-| Proof of personhood | World ID `app_952df7edf32b602c03c445e6732ea04a`, action `aivy-checkout` |
+| Escrow (Hedera testnet) | [`0x83B5…8226`](https://hashscan.io/testnet/contract/0x83B55906c6359c3f43Bf95cb8Cdef4455DB68226) |
+| Receipt log (HCS) | [topic `0.0.9736741`](https://hashscan.io/testnet/topic/0.0.9736741) |
+| World ID | `app_952df7edf32b602c03c445e6732ea04a` · action `aivy-checkout` · World ID 4.0 live |
 
-Every verdict on that site is a real signed transaction on Hedera testnet, and every
-receipt links to HashScan.
+Everything above is live infrastructure — no mocks in the money path.
+
+---
+
+## The loop, end to end
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor T as Tenant (verified human)
+    participant W as World ID
+    participant A as Aivy agent (API + relayer)
+    participant AI as Verifier (0G Compute / GPT)
+    participant S as 0G Storage
+    participant H as Hedera (escrow + HCS)
+
+    T->>W: prove unique live human (v4, Selfie/Orb)
+    W-->>A: verified credential → assurance tier → escrow cap
+    A->>H: createCheckout + commitNonce(challenge) + escrow deposit
+    Note over H: challenge hash exists on-chain BEFORE any photo
+    T->>A: photo of item + performed challenge (+ GPS if geo-locked)
+    A->>S: store evidence blob → public root hash
+    A->>AI: judge condition + challenge compliance
+    AI-->>A: itemized verdict, signature-verified inference
+    A->>H: verifyItemAndRelease(verdict, signature)
+    Note over H: contract ecrecovers the signature itself
+    H-->>T: last item passes → deposit transfers in the SAME call
+    A->>H: full receipt sealed to HCS (consensus-timestamped)
+```
+
+**Why a stored or AI-generated image can never win:** it would have to satisfy a
+challenge that did not exist until the checkout opened — the challenge hash is
+committed on-chain first, and the verdict is only accepted if it matches.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Human["🧍 Verified human"]
+        TG[Web / Telegram Mini App<br/>camera + IDKit v4]
+    end
+    subgraph Agent["🤖 Aivy settlement agent"]
+        API[api-server.ts<br/>tiers · templates · geo/time locks]
+        REL[relayer.ts<br/>verdict signer]
+    end
+    subgraph ZG["0G — verify, don't trust"]
+        C[0G Compute<br/>qwen2.5-omni · signature-verified inference]
+        ST[0G Storage<br/>public evidence roots]
+    end
+    subgraph HED["Hedera — settlement at machine speed"]
+        ESC[CheckoutEscrow.sol<br/>ecrecover + auto-release]
+        HCS[HCS topic<br/>immutable receipts]
+    end
+    W[World ID 4.0<br/>Device / Selfie / Orb]
+
+    TG -->|proof| W --> API
+    TG -->|evidence| API
+    API --> C
+    API --> ST
+    API --> REL --> ESC
+    ESC -->|Released event| REL --> HCS
+```
+
+One engine, six inspection templates (rental, vehicle, scooter, delivery, expense
+receipt, shelf audit) plus a **build-your-own** designer — because the contract never
+knew it was about apartments.
+
+---
+
+# Sponsor integrations — why each one, precisely
+
+## ⛓ Hedera — the autonomous escrow that settles at machine speed
+
+**What Aivy is, in Hedera's terms: an AI agent that moves value autonomously.**
+It opens escrows, commits challenge hashes, accepts signed AI verdicts, releases
+HBAR the moment conditions verify, and seals every receipt — *hold funds, verify
+delivery via HCS-anchored evidence, auto-release on condition match*. The agentic
+economy needs settlement that works at machine speed; a deposit release that costs
+sub-cent and finalizes in seconds is the only reason "the AI approved it → you're
+already paid" works as a product.
+
+| Hedera piece | How we use it | Proof |
+|---|---|---|
+| EVM smart contract (Solidity, Foundry) | `CheckoutEscrow` — itemized state machine, `ecrecover`-verified verdicts, unilateral auto-release, timeout resolution, registrar-gated creation | [contract](https://hashscan.io/testnet/contract/0x83B55906c6359c3f43Bf95cb8Cdef4455DB68226) · 22 forge tests |
+| **Native HBAR** value transfer | The deposit itself — no token overhead where none is needed | every `Released` tx |
+| **HCS** (Consensus Service) | The verifiable payment audit trail: full receipt JSON (items, hashes, signatures, txs) consensus-timestamped | [topic `0.0.9736741`](https://hashscan.io/testnet/topic/0.0.9736741) |
+| JS SDK (`@hashgraph/sdk`) | HCS topic creation + receipt sealing from the agent | `offchain/relayer.ts`, `api-server.ts` |
+
+**The autonomous part is structural, not cosmetic:** `verifyItemAndRelease` checks the
+verdict signature *and transfers in the same call*. There is no "host approves payout"
+step anywhere in the system — the human who owes the money cannot withhold it once the
+condition proves. That is what agentic payments should mean.
+
+**Novel vs. prior art:** escrows are old; escrows whose release condition is a
+*cryptographically verified AI judgement of physical reality* — with the anti-replay
+challenge living in the contract, not in a prompt — are not.
+
+**Honest gaps:** relayer key = authorized signer (single trusted signer; the contract
+supports hot-swapping to a TEE key — tested); nonces are committed at checkout open
+rather than per-capture-session; API state is in-memory. Engineering scars we kept for
+the next team: Hedera's EVM denominates `msg.value` in **tinybar** while the JSON-RPC
+relay speaks 18-decimal weibar, the relay rejects future nonces instead of queueing,
+and payouts to accounts that don't exist yet revert (we pre-check the mirror node so a
+typo can't trap a deposit).
+
+## 🌐 World — the human layer: who is behind the camera, and how sure are we
+
+**Aivy is a product for verified humans in an AI-assisted interaction** — the exact
+thing World's stack exists for. The evidence layer is only as good as the claim that a
+*real, live person* is behind the screen — so we made assurance level do real work:
+
+```mermaid
+flowchart LR
+    D["🟢 DEVICE<br/>World App only<br/>cap: 2 ℏ"] -->|"Selfie Check<br/>(anyone on Earth, no Orb)"| S["🤳 SELFIE<br/>cap: 10 ℏ"]
+    S -->|"Proof of Human"| O["⚪ ORB<br/>cap: 100 ℏ"]
+```
+
+**Verification level sets economic terms, not login.** Try to open a 10 ℏ vehicle
+escrow on a device-tier account and the platform **blocks, explains, and steps you
+up** — Selfie Check or Orb, in-app, live. That is Selfie Check used as a risk and
+eligibility signal in the most literal sense: the credential level is the collateral
+ceiling.
+
+| World piece | How we use it | Where |
+|---|---|---|
+| **World ID 4.0** (IDKit 4.2.1) | Backend-signed `rp_context` (`signRequest`), `IDKitRequestWidget`, verification via `POST /api/v4/verify/{rp_id}` | `webapp/src/App.tsx`, `offchain/api-server.ts` |
+| **Selfie Check (beta)** | The middle assurance rung — `selfieCheckLegacy` preset, live behind the step-up gate | step-up panel |
+| Proof of Human | `proofOfHuman` preset for the top tier | step-up panel |
+| Nullifier | Sybil key: one human = one active checkout; wallet linked once to the nullifier (never asked twice) | tier engine |
+| **Security posture** | Tier derives **only from World-verified credential identifiers** — the client hint is ignored for access control | `/api/world/verify-v4` |
+| **Beta testing documentation** | Dev + user feedback, including real integration findings (portal action API, v2/v4 fork, rp_context DX) | [docs/WORLD_INTEGRATION_FEEDBACK.md](docs/WORLD_INTEGRATION_FEEDBACK.md) |
+
+**Why Selfie Check matters here specifically:** it is the tier that makes the platform
+usable by *anyone on Earth* — no Orb within a thousand kilometers, still a real,
+economically-bounded account. Privacy holds the product promise: the app never sees
+biometrics or documents — only the anonymous nullifier and the credential *level*.
+
+**Honest gaps:** the exact credential identifier strings in the live v4 verify
+response are parsed defensively (fails toward the lowest tier) until the first real
+Selfie proof pins them; `session_id`-based continuity is roadmap — the nullifier
+carries identity for now.
+
+## 🧠 0G — verified, not blindly trusted
+
+**The verdict that moves the money should not be a trusted API call.** That is 0G's
+entire thesis — *every action cryptographically verified and settled on-chain instead
+of blindly trusted* — and Aivy applies it to the exact judgement where trust is
+weakest: an AI deciding whether your photo releases someone's deposit.
+
+| 0G piece | How we use it | Proof |
+|---|---|---|
+| **0G Compute** | The verdict brain: `qwen/qwen2.5-omni-7b` via the broker SDK — on-chain provider acknowledgement, signed request headers, **per-response signature verified** with `processResponse`; the receipt prints `0G COMPUTE · qwen2.5-omni-7b · TEE SIG ✓` | provider [`0xa48f…7836`](https://chainscan-galileo.0g.ai/address/0xa48f01287233509FD694a22Bf840225062E67836), funded ledger on-chain |
+| **0G Storage** | Every evidence blob — merkle root on the receipt, **publicly downloadable by anyone** via the indexer | `https://indexer-storage-testnet-turbo.0g.ai/file?root=…` links on every receipt |
+| User choice | A **verifier selector** in the app: `0G TEE · VERIFIABLE` vs `GPT · FRONTIER` — the verifiability trade-off as a product surface | checkout setup |
+
+**What we claim and refuse to claim, precisely** (this rigor is the feedback a beta
+wants): the provider is registered `verifiability: TeeML` and its **response
+signatures verify** — but its attestation endpoint returns *501: attestation not
+available for centralized providers* (payload tagged `centralized:aliyun`). So the
+honest claim is **signature-verified inference on 0G Compute**, not full TEE
+attestation. The code verifies whatever the provider offers; the day an attesting
+multimodal provider is live, this becomes TEE-sealed with **zero code changes**. A
+fallback verdict (provider slow/down → GPT) is never laundered as a 0G verdict — the
+receipt names the brain that actually decided.
+
+**Engineering scars kept for the next team:** the maintained SDK is
+`@0gfoundation/0g-storage-ts-sdk` — the older `@0glabs` package targets a retired flow
+contract and reverts on Galileo (16602); the response signature lives under the
+`zg-res-key` header, not the chat id; storage finalization is kept off the critical
+path (12s budget, background completion — the on-chain keccak is identical either way).
+
+---
 
 ## Deployments
 
@@ -42,32 +221,20 @@ receipt links to HashScan.
 | Our 0G account (funds the compute ledger and storage) | `0x44f7769bFB6E872f491CcF0B655Bee8c06A640a0` |
 | 0G Compute ledger contract | `0xE70830508dAc0A97e6c087c75f402f9Be669E406` |
 | 0G Compute inference serving contract | `0xa79F4c8311FF93C06b8CfB403690cc987c93F91E` |
-| Inference provider we acknowledged on-chain (`qwen/qwen2.5-omni-7b`) | `0xa48f01287233509FD694a22Bf840225062E67836` |
+| Inference provider acknowledged on-chain (`qwen/qwen2.5-omni-7b`) | `0xa48f01287233509FD694a22Bf840225062E67836` |
 
-`CheckoutEscrow` is ours. The 0G ledger and serving contracts are the network's — listed
-because our account holds a funded ledger there and each verdict is billed through them.
+`CheckoutEscrow` is ours. The 0G ledger and serving contracts are the network's —
+listed because our account holds a funded ledger there and each verdict is billed
+through them.
 
-## Why it isn't just "upload a photo"
-
-Three properties have to hold at once, and each one is enforced somewhere different:
-
-1. **The photo is fresh.** `commitNonce` writes `keccak256(instruction)` on-chain when
-   the checkout opens. The verdict is only accepted if its `nonceHash` matches that
-   commitment, so evidence for a challenge nobody had published yet cannot be
-   pre-baked. Anti-replay lives in the contract, not in the prompt.
-2. **The judgement is honest.** The verifier is prompted adversarially — the uploader
-   is financially motivated to hide damage — and must satisfy *both* condition and
-   liveness, failing when uncertain.
-3. **The payout is unilateral.** `verifyItemAndRelease` checks an `ecrecover`
-   signature. When the final required item passes, the contract transfers in the same
-   call. No host approval step exists to be withheld.
+---
 
 ## The signed payload (single source of truth)
 
 `ItemVerdict` is mirrored byte-for-byte in `src/ItemVerdictVerifier.sol` and
 `offchain/payload.ts`. Change one, change both — `npm run parity` proves they agree.
 
-```
+```solidity
 struct ItemVerdict {
   uint256 checkoutId;
   bytes32 itemId;     // keccak256(item name)
@@ -79,48 +246,9 @@ struct ItemVerdict {
 ```
 
 Digest = `personal_sign(keccak256(abi.encode(fields)))`, matching ethers
-`wallet.signMessage(getBytes(structHash))`.
-
-## Sponsor integrations
-
-**Hedera** — native HBAR escrow (no HTS). The itemized state machine, the `ecrecover`
-verdict check, and the auto-release all live in `CheckoutEscrow.sol`. Receipts are
-sealed to HCS by the relayer, because the EVM cannot write HCS directly.
-
-**0G** — two layers.
-
-*Storage* (live): evidence blobs upload to 0G Storage via
-`@0gfoundation/0g-storage-ts-sdk` and receipts link to the indexer by root. Uploads are
-budgeted rather than awaited (see *Engineering notes*).
-
-*Compute* (live, `ZEROG_COMPUTE=1`): the verdict that releases the deposit runs on 0G
-Compute via `@0gfoundation/0g-compute-ts-sdk` — model `qwen/qwen2.5-omni-7b`, billed
-through an on-chain ledger, provider acknowledged on-chain. The response signature is
-fetched and verified with `broker.inference.processResponse`, and the outcome is written
-into the evidence log and sealed to HCS with the rest of the receipt, so which brain
-ruled — and whether its signature verified — is checkable on-chain rather than asserted
-here.
-
-**What we can and cannot claim, precisely.** The service is registered on-chain with
-`verifiability: TeeML`, and its per-response signature verifies. But its attestation
-endpoint returns **501 — "attestation report is not available for centralized
-providers"**, and the signature payload is tagged `centralized:aliyun`. So the honest
-claim is *verified inference on 0G Compute*, not *TEE-sealed inference*. The two other
-multimodal TeeML providers on the network (`google/gemma-3-27b-it`,
-`openai/gpt-oss-20b`) were unreachable during the hackathon. The code verifies whatever
-the provider offers, so the day a real attesting provider is live this becomes TEE-sealed
-with no change.
-
-Fail-soft: on any provider error, timeout, rate limit, or unparseable answer the call
-returns null and the conventional vision brain decides — and the receipt records which
-one did, because a fallback verdict is not a 0G verdict.
-
-`npm run probe:compute` validates the path end to end (ledger, handshake, image request,
-signature verification) before it is switched on.
-
-**World ID** — one human, one live checkout. The nullifier is the sybil key: no
-documents, no wallet-per-person assumption. Device-level verification, so any World
-App user can pass.
+`wallet.signMessage(getBytes(structHash))`. The evidence hash is inside the signed
+payload; the contract checks the nonce commitment and the signature before a single
+tinybar moves.
 
 ## Templates
 
@@ -136,13 +264,16 @@ handover.
 | Delivery Handover | merchants & 3PLs |
 | Retail Shelf Audit | CPG brands & distributors |
 
-Plus a custom builder: define your own items and liveness challenges in the app.
+Plus the in-app **custom builder**: define your own items, AI criteria and liveness
+challenges (even *"a handwritten note reading X held next to the lamp"* — the verifier
+reads handwriting). Optional per-checkout **geo-lock** (GPS sealed into every capture)
+and **time-lock** (evidence window enforced by the on-chain deadline) complete the
+tuple: **who · that-it's-now · where · when · what — each independently verifiable.**
 
 Note what Expense Receipt changes: the subject stops being an object's condition and
-becomes a document's authenticity. Expense fraud is largely photographing a screen,
-claiming the same receipt twice, and editing totals — and a challenge committed
-on-chain *before* the photo exists cannot be satisfied by an image that already
-existed. Same escrow, same verdict signature, different fraud.
+becomes a document's authenticity — a challenge committed on-chain before the photo
+exists cannot be satisfied by a screenshot that already existed. Same escrow, same
+signature, different fraud.
 
 ## Tests
 
@@ -150,47 +281,17 @@ existed. Same escrow, same verdict signature, different fraud.
 forge test          # 22 passed, 0 failed
 ```
 
-Covering the happy path, FAIL-keeps-funds-locked, timeout→host, replay, wrong signer,
-uncommitted nonce, wrong deposit, the registrar gate, and the relayer→TEE signer swap.
-`cd offchain && npm test` runs 30 more over the guards (key resolution, personhood
-mode, nonce generation, prompt sanitising).
+Happy path, FAIL-keeps-funds-locked, timeout→host, replay, wrong signer, uncommitted
+nonce, wrong deposit, registrar gate, relayer→TEE signer swap. `cd offchain && npm
+test` runs 30 more over the guards (key resolution, personhood mode, nonce generation,
+prompt sanitising).
 
 ```bash
-anvil &                            # local chain
+anvil &                               # local chain
 cd offchain && npm i && npm run e2e   # full loop incl. rejection + timeout paths
-npm run parity                     # TS signature recovers to the same signer
+npm run parity                        # TS signature recovers to the same signer
+npm run probe:compute                 # 0G Compute: ledger, handshake, sig verification
 ```
-
-## Engineering notes
-
-Things that cost real time and are easy to get wrong again:
-
-- **Hedera value units.** Inside Hedera's EVM `msg.value` is tinybar (8 decimals),
-  while the JSON-RPC relay takes tx value in weibar (18). The stored deposit must be
-  tinybar-scaled or the equality check reverts.
-- **Hedera nonces.** The relay rejects future-nonce transactions instead of queueing
-  them like geth, so transactions are sent sequentially. Opening a checkout awaits
-  `createCheckout` and `deposit`; the nonce commits finish in the background and are
-  awaited later, at the first evidence upload.
-- **0G finalization is not on the critical path.** A segment can spend a minute in
-  "available, but not finalized yet". Since the keccak hash that goes on-chain is the
-  same whether the bytes sit on 0G or on disk, the upload gets a budget
-  (`ZEROG_TIMEOUT_MS`, default 12s) and then continues in the background.
-- **0G SDK.** Use `@0gfoundation/0g-storage-ts-sdk`. The older `@0glabs/0g-ts-sdk`
-  (0.3.x) targets a retired flow contract and its submit reverts on Galileo.
-- **iPhone photos are HEIC**, which vision APIs reject outright — the verdict never
-  runs. Captures are re-encoded to JPEG in a canvas before upload, which also drops a
-  4 MB photo to ~600 KB.
-- **Liveness challenges must be stageable.** A gesture held against a lit screen reads
-  as noise; a placed object reads as a placed object. And item descriptions must
-  describe structural damage, not wear — "no scratches" on venue furniture fails
-  honestly, forever.
-- **`createCheckout` is registrar-gated.** Without it anyone could squat an unused
-  `checkoutId`, register themselves as host with a deadline a second away, and take the
-  deposit through `resolveTimeout`. The deployer is the first registrar.
-- **Hedera payouts need an existing account.** A transfer to an address with no Hedera
-  account reverts and would trap the deposit, so payout targets are checked against
-  the mirror node first.
 
 ## Layout
 
@@ -198,15 +299,17 @@ Things that cost real time and are easy to get wrong again:
 aivy-checkout/
   src/CheckoutEscrow.sol          itemized escrow state machine + auto-release
   src/ItemVerdictVerifier.sol     the ecrecover verdict core
-  test/                           17 forge tests
+  test/                           22 forge tests
   offchain/
-    api-server.ts                 HTTP API: World ID gate, checkouts, evidence
+    api-server.ts                 HTTP API: World ID gate, tiers, checkouts, evidence
     payload.ts                    shared ItemVerdict schema + signer
-    vision-agent.ts               adversarial verifier (OpenAI vision; offline mock)
+    vision-agent.ts               adversarial verifier (0G Compute / GPT / offline mock)
+    compute-0g.ts                 0G Compute broker: signed, verified inference
     storage-0g.ts                 0G Storage with content-addressed local fallback
     relayer.ts                    signs verdicts, submits, seals receipts to HCS
     e2e-demo.ts                   whole loop on a local Anvil chain
-  webapp/                         React mini app (IDKit, camera capture, receipt)
+  webapp/                         React mini app (IDKit v4, camera, paper receipt)
+  docs/                           pitch, World beta feedback, Selfie activation runbook
   scripts/deploy.sh               build, ship, restart
 ```
 
@@ -214,8 +317,9 @@ aivy-checkout/
 
 `RPC_URL`, `RELAYER_PRIVATE_KEY`, `ESCROW_ADDRESS`, `PORT`, `CORS_ORIGIN`,
 `OPENAI_API_KEY`, `HCS_TOPIC_ID`, `HEDERA_OPERATOR_ID`/`HEDERA_OPERATOR_KEY`,
-`WORLD_APP_ID`/`WORLD_ACTION`, `ZEROG_RPC_URL`/`ZEROG_INDEXER_URL`/`ZEROG_PRIVATE_KEY`,
-`ZEROG_TIMEOUT_MS`.
+`WORLD_APP_ID`/`WORLD_ACTION`, `WORLD_RP_ID`/`WORLD_RP_SIGNING_KEY`,
+`SELFIE_CHECK_ENABLED`, `ZEROG_RPC_URL`/`ZEROG_INDEXER_URL`/`ZEROG_PRIVATE_KEY`,
+`ZEROG_TIMEOUT_MS`/`ZEROG_COMPUTE`.
 
 Unset `WORLD_APP_ID` and the app runs in simulator mode; unset the 0G or vision creds
 and each falls back loudly rather than silently. The contract flow is identical either
@@ -233,4 +337,4 @@ MIT — see [LICENSE](LICENSE).
 ## Toolchain
 
 Foundry (`forge`), Node 20+, npm. Deploy target: Hedera testnet EVM via a JSON-RPC
-relay (`https://testnet.hashio.io/api`). Native HBAR escrow — **no HTS**.
+relay (`https://testnet.hashio.io/api`). Native HBAR escrow.

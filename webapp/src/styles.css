@@ -646,3 +646,8 @@ body {
 .stepup-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .stepup-actions .cta { margin-top: 8px; width: auto; flex: 1; min-width: 200px; font-size: 11px; padding: 12px; }
 .cta.ghost { background: transparent; color: var(--dim); border: 1px dashed var(--line-hot); cursor: not-allowed; }
+
+/* verifier brain selector */
+.brainsel { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.brainsel .lock-mins { margin-left: 0; }
+.brain-mins button { flex: 1; }

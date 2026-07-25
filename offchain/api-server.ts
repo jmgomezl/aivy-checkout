@@ -185,7 +185,7 @@ function recordTier(nullifier: string, level: string | undefined) {
 const verifiedNullifiers = new Set<string>();
 const checkoutMeta = new Map<
   number,
-  { items: TemplateItem[]; tenant: string; template: string; icon: string; geoLock: boolean; timeLockMinutes: number; noncesReady?: Promise<void> }
+  { items: TemplateItem[]; tenant: string; template: string; icon: string; geoLock: boolean; timeLockMinutes: number; brain?: "0g-compute" | "openai"; noncesReady?: Promise<void> }
 >();
 const evidenceLog = new Map<number, Array<Record<string, unknown>>>();
 
@@ -292,7 +292,7 @@ function sanitizeCustomItems(raw: any): TemplateItem[] {
   });
 }
 
-async function createDemoCheckout(nullifier: string, tenantAddress?: string, templateId?: string, customItems?: any, fresh = false, geoLock = false, timeLockMinutes = 30) {
+async function createDemoCheckout(nullifier: string, tenantAddress?: string, templateId?: string, customItems?: any, fresh = false, geoLock = false, timeLockMinutes = 30, brain?: "0g-compute" | "openai") {
   // one human, one live checkout — the World ID nullifier is the sybil key
   const tpl = customItems ? null : (templateById(templateId ?? "rental_checkout") ?? TEMPLATES[0]);
   const items = customItems ? sanitizeCustomItems(customItems) : tpl!.items;
@@ -358,7 +358,7 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   noncesReady.catch((e) => console.error(`[api] checkout ${id} nonce commit failed —`, e?.message ?? e));
 
   humanToCheckout.set(nullifier, id);
-  checkoutMeta.set(id, { items, tenant, template: tpl ? tpl.title : "Custom Inspection", icon: tpl ? tpl.icon : "🛠", geoLock, timeLockMinutes: windowMin, noncesReady });
+  checkoutMeta.set(id, { items, tenant, template: tpl ? tpl.title : "Custom Inspection", icon: tpl ? tpl.icon : "🛠", geoLock, timeLockMinutes: windowMin, brain, noncesReady });
   console.log(`[api] checkout ${id} created for human ${nullifier.slice(0, 12)}… tenant=${tenant}`);
   return describeCheckout(id);
 }
@@ -451,6 +451,7 @@ async function describeCheckout(id: number) {
     templateIcon: meta?.icon ?? "▣",
     geoLock: meta?.geoLock ?? false,
     timeLockMinutes: meta?.timeLockMinutes ?? 30,
+    verifierBrain: meta?.brain ?? (process.env.ZEROG_COMPUTE === "1" ? "0g-compute" : "openai"),
     network,
     hcsTopic: process.env.HCS_TOPIC_ID ?? null,
     items,
@@ -498,7 +499,7 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
     itemDescription: item.desc,
     nonceInstruction: item.nonce,
     imagePath,
-  });
+  }, meta.brain);
 
   const v: ItemVerdict = {
     checkoutId: BigInt(id),
@@ -640,7 +641,68 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === "OPTIONS") return json(res, 204, {});
     if (path === "/api/health") {
-      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, network, hcsTopic: process.env.HCS_TOPIC_ID ?? null, worldId: process.env.WORLD_APP_ID ? "live" : "simulator", worldAppId: process.env.WORLD_APP_ID ?? null, worldAction: process.env.WORLD_ACTION ?? "aivy-checkout", selfieEnabled: SELFIE_ENABLED });
+      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, network, hcsTopic: process.env.HCS_TOPIC_ID ?? null, worldId: process.env.WORLD_APP_ID ? "live" : "simulator", worldAppId: process.env.WORLD_APP_ID ?? null, worldAction: process.env.WORLD_ACTION ?? "aivy-checkout", selfieEnabled: SELFIE_ENABLED, worldRpId: process.env.WORLD_RP_ID ?? null, computeEnabled: process.env.ZEROG_COMPUTE === "1" });
+    }
+    // ── World ID 4.0 (Selfie Check beta) — active when WORLD_RP_ID is set ──
+    if (path === "/api/world/rp-signature" && req.method === "POST") {
+      const rpKey = process.env.WORLD_RP_SIGNING_KEY;
+      if (!process.env.WORLD_RP_ID || !rpKey) return json(res, 503, { error: "World ID 4.0 not configured (WORLD_RP_ID / WORLD_RP_SIGNING_KEY)" });
+      const body = await readBody(req);
+      const { signRequest } = await import("@worldcoin/idkit-core/signing");
+      const { sig, nonce, createdAt, expiresAt } = signRequest({
+        signingKeyHex: rpKey,
+        action: String(body.action ?? process.env.WORLD_ACTION ?? "aivy-checkout"),
+      });
+      return json(res, 200, { sig, nonce, created_at: createdAt, expires_at: expiresAt, rp_id: process.env.WORLD_RP_ID });
+    }
+    if (path === "/api/world/verify-v4" && req.method === "POST") {
+      const rpId = process.env.WORLD_RP_ID;
+      if (!rpId) return json(res, 503, { error: "World ID 4.0 not configured" });
+      const body = await readBody(req);
+      const vres = await fetch(`https://developer.world.org/api/v4/verify/${rpId}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body.idkitResponse),
+      });
+      const vj: any = await vres.json().catch(() => ({}));
+      if (!vres.ok) {
+        console.error("[api] v4 verify failed:", vres.status, JSON.stringify(vj).slice(0, 300));
+        return json(res, 400, { error: "World ID verification failed", detail: vj });
+      }
+      // VENUE-TODO: confirm exact response shape from /api/v4/verify — we
+      // defensively look for the nullifier + credential type in common spots.
+      const r = body.idkitResponse ?? {};
+      const nullifier: string =
+        vj.nullifier_hash ?? vj.nullifier ?? r.nullifier_hash ?? r.nullifier ??
+        (Array.isArray(r.proofs) ? r.proofs[0]?.nullifier_hash : undefined) ?? "";
+      // SECURITY: tier derives ONLY from World-verified material. vj is the
+      // verifier's response (trusted); idkitResponse identifiers are usable
+      // only BECAUSE verification of that exact payload just succeeded.
+      // The client-supplied credentialHint is deliberately ignored.
+      const identifiers: string[] = [
+        ...(Array.isArray(vj.results) ? vj.results.map((x: any) => x?.identifier) : []),
+        ...(Array.isArray(vj.responses) ? vj.responses.map((x: any) => x?.identifier) : []),
+        ...(Array.isArray(r.results) ? r.results.map((x: any) => x?.identifier) : []),
+        ...(Array.isArray(r.responses) ? r.responses.map((x: any) => x?.identifier) : []),
+        vj.credential_type, vj.verification_level, r.credential_type, r.verification_level,
+      ].filter(Boolean).map((x: any) => String(x).toLowerCase());
+      const credential =
+        identifiers.find((i) => i.includes("selfie")) ??
+        identifiers.find((i) => i.includes("orb") || i.includes("human") || i.includes("passport") || i.includes("document")) ??
+        identifiers[0] ?? "device";
+      if (!nullifier) return json(res, 400, { error: "verified but no nullifier found — inspect payload", detail: vj });
+      verifiedNullifiers.add(nullifier);
+      // selfie_check / selfie -> selfie tier; orb / proof_of_human -> orb
+      const level = credential.includes("selfie") ? "selfie" : (credential.includes("orb") || credential.includes("human")) ? "orb" : "device";
+      recordTier(nullifier, level);
+      const tier = tierOf(nullifier);
+      console.log(`[api] ✅ v4 verified nullifier=${nullifier.slice(0, 14)}… credential=${credential} tier=${tier}`);
+      return json(res, 200, {
+        ok: true, nullifier, mode: "world-id-v4", credential, tier,
+        capHbar: TIER_CAP_HBAR[tier],
+        linkedWallet: nullifierWallet.get(nullifier) ?? null,
+        selfieEnabled: SELFIE_ENABLED,
+      });
     }
     if (path === "/api/verify-human" && req.method === "POST") {
       const out = await verifyHuman(await readBody(req));
@@ -670,7 +732,8 @@ const server = createServer(async (req, res) => {
         body.customItems,
         Boolean(body.fresh),
         Boolean(body.geoLock),
-        Number(body.timeLockMinutes) || 30
+        Number(body.timeLockMinutes) || 30,
+        body.brain === "openai" || body.brain === "0g-compute" ? body.brain : undefined
       ));
     }
     const mGet = /^\/api\/checkout\/(\d+)$/.exec(path);
