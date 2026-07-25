@@ -64,8 +64,12 @@ const TEMPLATES: Template[] = [
       // Both objects exist in every venue on earth, and the two nonces use
       // different mechanics — one placed prop, one bare hand — so losing the
       // pen costs one item instead of the whole demo.
-      { name: "chair", desc: "chair with an intact seat and backrest, no cracks or wobbling legs", nonce: "lay a yellow pen across the seat of the chair" },
-      { name: "table", desc: "table top with no chips, burns or deep scratches", nonce: "press an open palm flat on the table top" },
+      // Condition wording has to be satisfiable by the actual object. "no
+      // chips, burns or deep scratches" on a venue table fails honestly —
+      // every venue table has all three — and a verifier told to fail when
+      // uncertain will keep failing it. Describe structural damage, not wear.
+      { name: "chair", desc: "chair with an intact seat and backrest, no cracks or broken legs", nonce: "lay a yellow pen across the seat of the chair" },
+      { name: "laptop", desc: "laptop open, screen intact and casing not cracked", nonce: "rest one open palm flat beside the trackpad" },
     ],
   },
   {
