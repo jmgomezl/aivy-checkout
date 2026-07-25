@@ -126,7 +126,7 @@ type Archived = {
   ts: string;
   items: ArchivedItem[];
 };
-type TemplateCard = { id: string; title: string; payer: string; blurb: string; icon: string; itemCount: number };
+type TemplateCard = { id: string; title: string; payer: string; blurb: string; icon: string; itemCount: number; depositHbar: number };
 type DraftItem = { name: string; desc: string; nonce: string };
 const PIPELINE = ["UPLOADING EVIDENCE", "HASHING → 0G STORAGE", "AI VISION ANALYZING", "SIGNING VERDICT", "SETTLING ON-CHAIN"];
 
@@ -392,6 +392,10 @@ export default function App() {
   const [building, setBuilding] = useState(false);
   const [draft, setDraft] = useState<DraftItem[]>([{ name: "", desc: "", nonce: "" }]);
   const [geoLock, setGeoLock] = useState(false);
+  const [tier, setTier] = useState<"device" | "selfie" | "orb">("device");
+  const [capHbar, setCapHbar] = useState(2);
+  const [selfieEnabled, setSelfieEnabled] = useState(false);
+  const [stepUp, setStepUp] = useState<"selfie" | "orb" | null>(null);
   const [timeLock, setTimeLock] = useState(0); // 0 = default 30min, else minutes
   const starting = useRef(false);
   const wantFresh = useRef(false);
@@ -417,8 +421,9 @@ export default function App() {
   const verify = useCallback(async () => {
     setError("");
     try {
-      const out = await api<{ linkedWallet?: string | null }>("/api/verify-human", { nullifier });
+      const out = await api<{ linkedWallet?: string | null; tier?: any; capHbar?: number; selfieEnabled?: boolean }>("/api/verify-human", { nullifier });
       if (out.linkedWallet && !payout) setPayout(out.linkedWallet);
+      if (out.tier) { setTier(out.tier); setCapHbar(out.capHbar ?? 2); setSelfieEnabled(!!out.selfieEnabled); }
       setVerified(true);
       localStorage.setItem("aivy:verified", "1");
       tg?.HapticFeedback?.notificationOccurred?.("success");
@@ -430,11 +435,13 @@ export default function App() {
   const onWorldIdSuccess = useCallback(async (proof: ISuccessResult) => {
     setError("");
     try {
-      const out = await api<{ ok: boolean; nullifier: string; linkedWallet?: string | null }>("/api/verify-human", { proof });
+      const out = await api<{ ok: boolean; nullifier: string; linkedWallet?: string | null; tier?: any; capHbar?: number; selfieEnabled?: boolean }>("/api/verify-human", { proof });
       if (out.linkedWallet && !payout) setPayout(out.linkedWallet);
+      if (out.tier) { setTier(out.tier); setCapHbar(out.capHbar ?? 2); setSelfieEnabled(!!out.selfieEnabled); }
       setNullifier(out.nullifier);
       localStorage.setItem("aivy:nullifier", out.nullifier);
       setVerified(true);
+      setStepUp(null);
       localStorage.setItem("aivy:verified", "1");
       tg?.HapticFeedback?.notificationOccurred?.("success");
     } catch (e: any) {
@@ -585,7 +592,10 @@ export default function App() {
         {/* ─── HUB: pick a use case ─────────────────────────────────── */}
         {verified && !checkout && !picked && !building && (
           <section className="reveal d1">
-            <div className="verified-chip">✓ HUMAN VERIFIED · {nullifier.slice(0, 14)}…</div>
+            <div className="chips">
+              <span className="verified-chip">✓ HUMAN VERIFIED · {nullifier.slice(0, 14)}…</span>
+              <span className={`tier-chip t-${tier}`}>{tier === "orb" ? "⚪ ORB" : tier === "selfie" ? "🤳 SELFIE" : "🟢 DEVICE"} · CAP {capHbar} ℏ</span>
+            </div>
             <h2 className="hub-title">PROOF FOR ANYTHING<br />YOU CAN PHOTOGRAPH.</h2>
             <p className="panel-copy hub-copy">
               One engine — escrow, liveness challenges, AI verdicts, sealed receipts. Pick an
@@ -598,9 +608,35 @@ export default function App() {
                   <span className="usecase-icon">{t.icon}</span>
                   <span className="usecase-title">{t.title.toUpperCase()}</span>
                   <span className="usecase-blurb">{t.blurb}</span>
-                  <span className="usecase-meta">{t.itemCount} CHECKS · PAYS: {t.payer.toUpperCase()}</span>
+                  <span className="usecase-meta">{t.itemCount} CHECKS · {t.depositHbar} ℏ ESCROW{t.depositHbar > capHbar ? " · 🔒 STEP-UP" : ""} · PAYS: {t.payer.toUpperCase()}</span>
                 </button>
               ))}
+              {stepUp && (
+                <div className="stepup reveal">
+                  <b className="stepup-title">🔒 HIGHER ASSURANCE REQUIRED</b>
+                  <p className="stepup-copy">
+                    This escrow size needs the {stepUp === "selfie" ? "SELFIE" : "ORB"} tier. Your World ID
+                    assurance level literally sets your economic limits here.
+                  </p>
+                  <div className="stepup-actions">
+                    {selfieEnabled ? (
+                      <button className="cta" onClick={() => setError("Selfie Check flow: wire IDKit v4 preset here (enabled)")}>🤳 SELFIE CHECK</button>
+                    ) : (
+                      <button className="cta ghost" disabled>🤳 SELFIE CHECK — BETA OPENS THIS WEEKEND</button>
+                    )}
+                    {health?.worldAppId && (
+                      <IDKitWidget
+                        app_id={health.worldAppId as `app_${string}`}
+                        action={health.worldAction ?? "aivy-checkout"}
+                        verification_level={VerificationLevel.Orb}
+                        onSuccess={onWorldIdSuccess}
+                      >
+                        {({ open }) => <button className="cta" onClick={open}>⚪ VERIFY WITH ORB</button>}
+                      </IDKitWidget>
+                    )}
+                  </div>
+                </div>
+              )}
               <button className="usecase custom reveal d3" onClick={() => setBuilding(true)}>
                 <span className="usecase-icon">＋</span>
                 <span className="usecase-title">BUILD YOUR OWN</span>

@@ -55,7 +55,7 @@ const RELAYER_PK = resolveRelayerKey(process.env);
 const WORLD_MODE = resolveWorldMode(process.env);
 
 type TemplateItem = { name: string; desc: string; nonce: string };
-type Template = { id: string; title: string; payer: string; blurb: string; icon: string; items: TemplateItem[] };
+type Template = { id: string; title: string; payer: string; blurb: string; icon: string; depositHbar?: number; items: TemplateItem[] };
 
 // The platform: one escrow + evidence + AI-verdict engine, many inspection
 // templates. Anything physical that two parties dispute at a handover.
@@ -101,6 +101,7 @@ const TEMPLATES: Template[] = [
     id: "vehicle_return",
     title: "Vehicle Return",
     payer: "rental fleets & insurers",
+    depositHbar: 10, // premium escrow — requires a higher assurance tier
     blurb: "Bumper-to-bumper condition receipt before the keys change hands.",
     icon: "🚗",
     items: [
@@ -159,6 +160,27 @@ let network = "local"; // "hedera-testnet" | "hedera-mainnet" | "local"
 const humanToCheckout = new Map<string, number>();
 // single-login UX: first wallet a human provides is remembered forever
 const nullifierWallet = new Map<string, string>();
+
+// ── assurance tiers ─────────────────────────────────────────────────
+// World ID verification level changes ECONOMIC TERMS, not just access:
+// higher assurance -> bigger deposits the platform will escrow for you.
+//   device  — World App install, no Orb (live today)
+//   selfie  — Selfie Check beta (flag-gated until World enables access)
+//   orb     — Proof of Human (live today; in-app step-up)
+type Tier = "device" | "selfie" | "orb";
+const TIER_CAP_HBAR: Record<Tier, number> = { device: 2, selfie: 10, orb: 100 };
+const TIER_RANK: Record<Tier, number> = { device: 0, selfie: 1, orb: 2 };
+const SELFIE_ENABLED = process.env.SELFIE_CHECK_ENABLED === "1"; // flip at the venue
+const nullifierTier = new Map<string, Tier>();
+
+function tierOf(nullifier: string): Tier {
+  return nullifierTier.get(nullifier) ?? "device";
+}
+function recordTier(nullifier: string, level: string | undefined) {
+  const t: Tier = level === "orb" ? "orb" : level === "selfie" ? "selfie" : "device";
+  const prev = tierOf(nullifier);
+  if (TIER_RANK[t] > TIER_RANK[prev] || !nullifierTier.has(nullifier)) nullifierTier.set(nullifier, t);
+}
 // nullifiers that passed a REAL World ID proof this boot (live mode only)
 const verifiedNullifiers = new Set<string>();
 const checkoutMeta = new Map<
@@ -296,7 +318,17 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   // while the JSON-RPC relay takes tx value in 18-decimal weibar. So the
   // stored deposit must be tinybar-scaled on Hedera or the == check reverts.
   const isHedera = network.startsWith("hedera");
-  const deposit = isHedera ? 2n * 10n ** 8n : parseEther("2");
+  const depositHbarWanted = tpl?.depositHbar ?? 2;
+  // ── the assurance gate: your World ID tier caps how much we escrow ──
+  const tier = tierOf(nullifier);
+  const cap = TIER_CAP_HBAR[tier];
+  if (depositHbarWanted > cap) {
+    const need: Tier = depositHbarWanted <= TIER_CAP_HBAR.selfie ? "selfie" : "orb";
+    throw new Error(
+      `TIER_GATE:${need}:this ${depositHbarWanted} ℏ escrow exceeds your ${tier.toUpperCase()} tier cap of ${cap} ℏ — step up with ${need === "selfie" ? "Selfie Check" : "Orb verification"} to unlock it`
+    );
+  }
+  const deposit = isHedera ? BigInt(depositHbarWanted) * 10n ** 8n : parseEther(String(depositHbarWanted));
   // time lock: the whole checkout must finish inside this window (on-chain deadline)
   const windowMin = Math.min(Math.max(Math.round(timeLockMinutes) || 30, 5), 120);
   // use CHAIN time, not wall time — dev chains (anvil) drift via evm_increaseTime
@@ -306,7 +338,7 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   await (await escrow.getFunction("createCheckout")(id, tenant, deposit, deadline, items.map((i) => itemIdOf(i.name)))).wait();
   // demo: relayer funds the deposit on the tenant's behalf via direct call
   // (tx value always 18-dec through the RPC layer; Hedera relay converts)
-  const txValue = isHedera ? parseEther("2") : deposit;
+  const txValue = isHedera ? parseEther(String(depositHbarWanted)) : deposit;
   await (await escrow.getFunction("deposit")(id, { value: txValue })).wait();
 
   // The liveness nonces aren't needed until the tenant submits their first
@@ -608,17 +640,24 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === "OPTIONS") return json(res, 204, {});
     if (path === "/api/health") {
-      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, network, hcsTopic: process.env.HCS_TOPIC_ID ?? null, worldId: process.env.WORLD_APP_ID ? "live" : "simulator", worldAppId: process.env.WORLD_APP_ID ?? null, worldAction: process.env.WORLD_ACTION ?? "aivy-checkout" });
+      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, network, hcsTopic: process.env.HCS_TOPIC_ID ?? null, worldId: process.env.WORLD_APP_ID ? "live" : "simulator", worldAppId: process.env.WORLD_APP_ID ?? null, worldAction: process.env.WORLD_ACTION ?? "aivy-checkout", selfieEnabled: SELFIE_ENABLED });
     }
     if (path === "/api/verify-human" && req.method === "POST") {
       const out = await verifyHuman(await readBody(req));
-      return json(res, out.ok ? 200 : 400, { ...out, linkedWallet: out.ok ? nullifierWallet.get(out.nullifier) ?? null : null });
+      const tier = out.ok ? tierOf(out.nullifier) : "device";
+      return json(res, out.ok ? 200 : 400, {
+        ...out,
+        linkedWallet: out.ok ? nullifierWallet.get(out.nullifier) ?? null : null,
+        tier,
+        capHbar: TIER_CAP_HBAR[tier],
+        selfieEnabled: SELFIE_ENABLED,
+      });
     }
     if (path === "/api/history" && req.method === "GET") {
       return json(res, 200, { topic: process.env.HCS_TOPIC_ID ?? null, receipts: await readHistory() });
     }
     if (path === "/api/templates" && req.method === "GET") {
-      return json(res, 200, { templates: TEMPLATES.map(({ id, title, payer, blurb, icon, items }) => ({ id, title, payer, blurb, icon, itemCount: items.length })) });
+      return json(res, 200, { templates: TEMPLATES.map(({ id, title, payer, blurb, icon, items, depositHbar }) => ({ id, title, payer, blurb, icon, itemCount: items.length, depositHbar: depositHbar ?? 2 })) });
     }
     if (path === "/api/demo/checkout" && req.method === "POST") {
       const body = await readBody(req);

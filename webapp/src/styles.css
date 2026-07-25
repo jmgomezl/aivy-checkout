@@ -633,3 +633,16 @@ body {
 .lockchip { margin-left: 8px; color: var(--lime); font-size: 10px; letter-spacing: .08em; }
 .lockchip.hot { color: var(--red); animation: pulse 1s ease-in-out infinite; }
 .paper-locks { margin-top: 8px; font-size: 9px; letter-spacing: .16em; color: var(--paper-dim); font-weight: 700; }
+
+/* ── assurance tiers ──────────────────────────────────────────────── */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.tier-chip { display: inline-block; font-size: 10px; letter-spacing: .14em; border-radius: 3px; padding: 4px 9px; border: 1px solid var(--line-hot); color: var(--dim); }
+.tier-chip.t-orb { color: var(--fg); border-color: var(--fg); }
+.tier-chip.t-selfie { color: #7fb7ff; border-color: #7fb7ff; }
+.tier-chip.t-device { color: var(--lime); border-color: var(--lime); }
+.stepup { grid-column: 1 / -1; border: 1px dashed var(--red); border-radius: 4px; padding: 16px; background: var(--red-dim); }
+.stepup-title { font-family: var(--display); font-size: 12px; letter-spacing: .1em; }
+.stepup-copy { color: var(--dim); font-size: 12px; margin: 6px 0 4px; }
+.stepup-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.stepup-actions .cta { margin-top: 8px; width: auto; flex: 1; min-width: 200px; font-size: 11px; padding: 12px; }
+.cta.ghost { background: transparent; color: var(--dim); border: 1px dashed var(--line-hot); cursor: not-allowed; }
