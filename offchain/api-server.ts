@@ -37,13 +37,22 @@ import {
 import { itemIdOf, signVerdict, ItemVerdict } from "./payload.js";
 import { storeEvidence } from "./storage-0g.js";
 import { judge } from "./vision-agent.js";
+import {
+  resolveRelayerKey,
+  resolveWorldMode,
+  newCheckoutId,
+  generateLivenessNonce,
+  sanitizeForPrompt,
+} from "./guards.js";
 
 const PORT = Number(process.env.PORT ?? 8791);
 const RPC = process.env.RPC_URL ?? "http://127.0.0.1:8545";
-const RELAYER_PK =
-  process.env.RELAYER_PRIVATE_KEY ??
-  // anvil pk[1] — DEV ONLY; a real deployment must set RELAYER_PRIVATE_KEY
-  "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+// Throws unless a real key is configured (or NODE_ENV marks a dev run) — the
+// relayer key is the escrow's verifier, so it has no safe default.
+const RELAYER_PK = resolveRelayerKey(process.env);
+// Throws unless WORLD_APP_ID is set or simulated personhood is explicitly
+// opted into — the simulator accepts any nullifier a client invents.
+const WORLD_MODE = resolveWorldMode(process.env);
 
 type TemplateItem = { name: string; desc: string; nonce: string };
 type Template = { id: string; title: string; payer: string; blurb: string; icon: string; items: TemplateItem[] };
@@ -144,7 +153,7 @@ const relayer = new NonceManager(relayerWallet);
 
 let escrow: Contract;
 let network = "local"; // "hedera-testnet" | "hedera-mainnet" | "local"
-let nextCheckoutId = Math.floor(Date.now() / 1000) % 1_000_000; // unique-ish per boot
+// checkout ids come from guards.newCheckoutId() — 48 bits of CSPRNG entropy
 
 // sybil gate: one human -> one active demo checkout
 const humanToCheckout = new Map<string, number>();
@@ -184,6 +193,15 @@ async function boot() {
 // ---------------------------------------------------------------------------
 async function verifyHuman(body: any): Promise<{ ok: boolean; nullifier: string; mode: string }> {
   const appId = process.env.WORLD_APP_ID;
+  if (WORLD_MODE === "simulator") {
+    // Only reachable when the operator explicitly opted in (see guards.ts).
+    const simNullifier = String(body?.nullifier ?? "").slice(0, 128);
+    if (!simNullifier) return { ok: false, nullifier: "", mode: "simulator" };
+    console.warn(
+      `[api] ⚠️  SIMULATED personhood (no WORLD_APP_ID) for nullifier ${simNullifier.slice(0, 18)}…`,
+    );
+    return { ok: true, nullifier: simNullifier, mode: "simulator" };
+  }
   if (appId && body?.proof) {
     // Real verification against the World Developer Portal.
     const res = await fetch(`https://developer.worldcoin.org/api/v2/verify/${appId}`, {
@@ -198,18 +216,16 @@ async function verifyHuman(body: any): Promise<{ ok: boolean; nullifier: string;
       }),
     });
     const j: any = await res.json();
-    const ok = res.ok && j.success !== false;
+    // Require an explicit success: a malformed or error-shaped 200 must not
+    // count as a proof.
+    const ok = res.ok && j?.success === true;
     if (ok) verifiedNullifiers.add(body.proof.nullifier_hash);
     return { ok, nullifier: body.proof.nullifier_hash, mode: "world-id" };
   }
   const nullifier = String(body?.nullifier ?? "").slice(0, 128);
-  if (!nullifier) return { ok: false, nullifier: "", mode: appId ? "world-id" : "simulator" };
-  if (appId) {
-    // Live mode without a proof: only accept nullifiers already proven this boot.
-    return { ok: verifiedNullifiers.has(nullifier), nullifier, mode: "world-id" };
-  }
-  console.warn(`[api] ⚠️  WORLD_APP_ID not set — SIMULATED personhood for nullifier ${nullifier.slice(0, 18)}…`);
-  return { ok: true, nullifier, mode: "simulator" };
+  if (!nullifier) return { ok: false, nullifier: "", mode: "world-id" };
+  // Live mode without a proof: only accept nullifiers already proven this boot.
+  return { ok: verifiedNullifiers.has(nullifier), nullifier, mode: "world-id" };
 }
 
 // ---------------------------------------------------------------------------
@@ -245,10 +261,12 @@ function sanitizeCustomItems(raw: any): TemplateItem[] {
   if (!Array.isArray(raw) || raw.length < 1 || raw.length > 8) throw new Error("1-8 items required");
   return raw.map((r: any, i: number) => {
     const name = String(r?.name ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
-    const desc = String(r?.desc ?? "").trim().slice(0, 160);
-    const nonce = String(r?.nonce ?? "").trim().slice(0, 160);
-    if (!name || !desc || !nonce) throw new Error(`item ${i + 1}: name, description and liveness challenge are all required`);
-    return { name, desc, nonce };
+    // Neutralised before it can reach the vision prompt (see guards.ts).
+    const desc = sanitizeForPrompt(r?.desc);
+    if (!name || !desc) throw new Error(`item ${i + 1}: name and description are both required`);
+    // The liveness challenge is chosen by the SERVER, never by the client: a
+    // challenge the uploader picks is one an old photo can already satisfy.
+    return { name, desc, nonce: generateLivenessNonce() };
   });
 }
 
@@ -270,7 +288,9 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
     if (c.status === 2n && meta0.template === (tpl ? tpl.title : "Custom Inspection")) return describeCheckout(existing);
   }
 
-  const id = nextCheckoutId++;
+  // Unpredictable: createCheckout is unauthenticated on-chain, so a guessable
+  // id lets an attacker squat the checkout this tenant is about to fund.
+  const id = newCheckoutId();
   const tenant = await resolvePayout(nullifier, tenantAddress);
   // HEDERA GOTCHA: inside Hedera's EVM, msg.value is in tinybar (8 decimals),
   // while the JSON-RPC relay takes tx value in 18-decimal weibar. So the

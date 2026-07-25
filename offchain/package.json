@@ -10,7 +10,9 @@
     "relayer": "tsx relayer.ts",
     "deploy": "tsx deploy.ts",
     "e2e": "tsx e2e-demo.ts",
-    "api": "tsx api-server.ts"
+    "api": "tsx api-server.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@0gfoundation/0g-storage-ts-sdk": "^1.2.10",

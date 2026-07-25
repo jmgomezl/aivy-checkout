@@ -43,6 +43,11 @@ contract CheckoutEscrow {
     address public verifier;   // relayer key baseline; swappable to 0G TEE key
     address public owner;      // deploys + governs signer swaps (hackathon-simple)
 
+    /// Addresses permitted to open a checkout. Without this gate anyone could
+    /// squat an unused checkoutId, register themselves as host with a deadline
+    /// one second out, and take the deposit via resolveTimeout.
+    mapping(address => bool) public registrars;
+
     mapping(uint256 => Checkout) public checkouts;
     // checkoutId => itemId => required?
     mapping(uint256 => mapping(bytes32 => bool)) public isRequiredItem;
@@ -61,11 +66,13 @@ contract CheckoutEscrow {
     event DepositReleased(uint256 indexed checkoutId, address indexed tenant, uint256 amount);
     event CheckoutResolved(uint256 indexed checkoutId, address indexed host, uint256 amount);
     event VerifierUpdated(address indexed previous, address indexed next);
+    event RegistrarUpdated(address indexed registrar, bool allowed);
 
     // ------------------------------------------------------------------
     // Errors
     // ------------------------------------------------------------------
     error NotOwner();
+    error NotRegistrar();
     error NotHost();
     error BadStatus();
     error AlreadyExists();
@@ -86,7 +93,9 @@ contract CheckoutEscrow {
     constructor(address _verifier) {
         owner = msg.sender;
         verifier = _verifier;
+        registrars[msg.sender] = true;
         emit VerifierUpdated(address(0), _verifier);
+        emit RegistrarUpdated(msg.sender, true);
     }
 
     /// Swap relayer key -> 0G TEE enclave key without redeploying.
@@ -94,6 +103,13 @@ contract CheckoutEscrow {
         if (msg.sender != owner) revert NotOwner();
         emit VerifierUpdated(verifier, next);
         verifier = next;
+    }
+
+    /// Authorize (or revoke) an address that may open checkouts.
+    function setRegistrar(address who, bool allowed) external {
+        if (msg.sender != owner) revert NotOwner();
+        registrars[who] = allowed;
+        emit RegistrarUpdated(who, allowed);
     }
 
     // ------------------------------------------------------------------
@@ -109,6 +125,7 @@ contract CheckoutEscrow {
         uint64 deadline,
         bytes32[] calldata itemIds
     ) external {
+        if (!registrars[msg.sender]) revert NotRegistrar();
         if (checkouts[checkoutId].status != Status.None) revert AlreadyExists();
         if (itemIds.length == 0 || itemIds.length > 32) revert NoItems();
         if (deadline <= block.timestamp) revert PastDeadline();

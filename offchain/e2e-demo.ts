@@ -12,6 +12,11 @@
  * Prereqs: anvil running (default http://127.0.0.1:8545), `forge build` done.
  * Run: npm run e2e
  */
+// This demo deliberately drives the offline mock verifier (it asserts on the
+// rejection path). judge() refuses to run the mock implicitly, so opt in here —
+// before importing vision-agent, which reads this at call time.
+process.env.AIVY_ALLOW_MOCK_VISION ??= "1";
+
 import { Contract, ContractFactory, JsonRpcProvider, NonceManager, Wallet, keccak256, toUtf8Bytes, parseEther } from "ethers";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { itemIdOf, signVerdict, ItemVerdict } from "./payload.js";
@@ -20,7 +25,10 @@ import { judge } from "./vision-agent.js";
 
 const RPC = process.env.E2E_RPC_URL ?? "http://127.0.0.1:8545";
 
-// anvil's default funded accounts
+// anvil's default funded accounts.
+// NOTE: PK_DEPLOYER_RELAYER below is NOT one of anvil's published keys — it
+// differs from anvil pk[0] in its last 12 hex characters. Provenance unknown;
+// treat as compromised and do not fund it on any real network.
 const PK_DEPLOYER_RELAYER = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d45d95e6f00";
 const PK_HOST = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 const PK_TENANT = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a";
@@ -71,6 +79,9 @@ async function main() {
     await c.waitForDeployment();
     return new Contract(await c.getAddress(), artifact.abi, relayer);
   })()) as Contract;
+  // The deployer is a registrar by default; the demo's host wallet is not.
+  // Opening a checkout is privileged now, so authorize the host explicitly.
+  await (await escrow.getFunction("setRegistrar")(await host.getAddress(), true)).wait();
   console.log(`\n[1] deployed CheckoutEscrow at ${await escrow.getAddress()} (verifier=${relayerAddr})`);
 
   const deposit = parseEther("200");

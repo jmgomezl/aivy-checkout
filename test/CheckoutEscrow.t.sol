@@ -28,6 +28,9 @@ contract CheckoutEscrowTest is Test {
     function setUp() public {
         verifier = vm.addr(verifierPk);
         escrow = new CheckoutEscrow(verifier);
+        // This test contract is the owner (it deployed); authorize the host so
+        // it may open checkouts. Opening one is now a privileged action.
+        escrow.setRegistrar(host, true);
         deadline = uint64(block.timestamp + 1 days);
 
         vm.deal(tenant, DEPOSIT);
@@ -226,5 +229,87 @@ contract CheckoutEscrowTest is Test {
         bytes memory sig = _sign(verifierPk, v);
         vm.expectRevert(CheckoutEscrow.NonceNotCommitted.selector);
         escrow.verifyItemAndRelease(78, v, sig);
+    }
+
+    // ==================================================================
+    // createCheckout access control
+    // ==================================================================
+
+    function _oneItem() internal view returns (bytes32[] memory items) {
+        items = new bytes32[](1);
+        items[0] = ITEM_TV;
+    }
+
+    function test_CreateCheckout_UnauthorizedCallerReverts() public {
+        address attacker = address(0xBAD);
+        vm.prank(attacker);
+        vm.expectRevert(CheckoutEscrow.NotRegistrar.selector);
+        escrow.createCheckout(101, tenant, DEPOSIT, deadline, _oneItem());
+    }
+
+    function test_Deployer_IsRegistrarByDefault() public {
+        assertTrue(escrow.registrars(address(this)), "deployer must be able to open checkouts");
+        // and it genuinely works, not just the flag
+        escrow.createCheckout(102, tenant, DEPOSIT, deadline, _oneItem());
+        (, address t,,,,,) = escrow.checkouts(102);
+        assertEq(t, tenant);
+    }
+
+    function test_SetRegistrar_OnlyOwner() public {
+        address attacker = address(0xBAD);
+        vm.prank(attacker);
+        vm.expectRevert(CheckoutEscrow.NotOwner.selector);
+        escrow.setRegistrar(attacker, true);
+    }
+
+    function test_SetRegistrar_GrantsAndRevokes() public {
+        address newHost = address(0xC0FFEE);
+        vm.prank(newHost);
+        vm.expectRevert(CheckoutEscrow.NotRegistrar.selector);
+        escrow.createCheckout(103, tenant, DEPOSIT, deadline, _oneItem());
+
+        escrow.setRegistrar(newHost, true);
+        vm.prank(newHost);
+        escrow.createCheckout(103, tenant, DEPOSIT, deadline, _oneItem());
+
+        // revoking stops any further checkouts
+        escrow.setRegistrar(newHost, false);
+        vm.prank(newHost);
+        vm.expectRevert(CheckoutEscrow.NotRegistrar.selector);
+        escrow.createCheckout(104, tenant, DEPOSIT, deadline, _oneItem());
+    }
+
+    /// The attack the gate exists to stop: an attacker who can predict the next
+    /// checkoutId front-runs the backend, registers itself as host with a
+    /// one-second deadline, waits for the tenant to fund, and takes the whole
+    /// deposit via resolveTimeout.
+    function test_AttackerCannotSquatIdAndStealDeposit() public {
+        address attacker = address(0xBAD);
+        uint256 squattedId = 4242;
+
+        vm.prank(attacker);
+        vm.expectRevert(CheckoutEscrow.NotRegistrar.selector);
+        escrow.createCheckout(squattedId, tenant, DEPOSIT, uint64(block.timestamp + 1), _oneItem());
+
+        // The id was never claimed, so the legitimate registrar still gets it.
+        // `host` is an EOA (authorized in setUp) — the payout below is a real
+        // native transfer, so the recipient must be able to receive value.
+        vm.prank(host);
+        escrow.createCheckout(squattedId, tenant, DEPOSIT, deadline, _oneItem());
+        (address h,,,,,,) = escrow.checkouts(squattedId);
+        assertEq(h, host, "host must be the authorized registrar, not the attacker");
+
+        // And the attacker cannot drain it after the deadline either: anyone may
+        // call resolveTimeout, but the money goes to the registered host.
+        vm.deal(tenant, DEPOSIT);
+        vm.prank(tenant);
+        escrow.deposit{value: DEPOSIT}(squattedId);
+        vm.warp(deadline + 1);
+        uint256 attackerBefore = attacker.balance;
+        uint256 hostBefore = host.balance;
+        vm.prank(attacker);
+        escrow.resolveTimeout(squattedId);
+        assertEq(attacker.balance, attackerBefore, "payout must never go to the caller");
+        assertEq(host.balance, hostBefore + DEPOSIT, "payout must go to the registered host");
     }
 }
