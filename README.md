@@ -1,5 +1,14 @@
 # Aivy Checkout
 
+<p align="center">
+  <a href="https://checkout.aivylabs.xyz"><img src="https://img.shields.io/badge/live-checkout.aivylabs.xyz-c6f52e?style=flat-square" alt="live"></a>
+  <img src="https://img.shields.io/badge/forge_tests-22%2F22-2ea043?style=flat-square" alt="tests">
+  <a href="https://hashscan.io/testnet/contract/0x83B55906c6359c3f43Bf95cb8Cdef4455DB68226"><img src="https://img.shields.io/badge/Hedera-testnet_escrow_%2B_HCS-8259ef?style=flat-square" alt="hedera"></a>
+  <img src="https://img.shields.io/badge/World_ID-4.0_%C2%B7_Selfie_Check-000000?style=flat-square" alt="world">
+  <img src="https://img.shields.io/badge/0G-storage_%2B_verified_inference-7c3aed?style=flat-square" alt="0g">
+  <img src="https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square" alt="mit">
+</p>
+
 **Verifiable inspection receipts for the physical world — an AI judges the evidence, the chain moves the money, and a human is provably behind every photo.**
 
 AI can analyze evidence perfectly, but it cannot walk to the apartment. Every deposit
