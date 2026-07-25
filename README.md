@@ -1,4 +1,4 @@
-# Aivy Inspect
+# Aivy Checkout
 
 **Verifiable inspection receipts for the physical world — an AI judges the evidence, the chain moves the money, and a human is provably behind every photo.**
 
@@ -10,6 +10,14 @@ an **escrow releases the money the instant the last item passes** — no counter
 the loop, and a receipt anyone can audit forever.
 
 Built solo at **ETHGlobal Lisboa** · Hedera × World × 0G
+
+> **Provenance, to be precise:** *Aivy* is our agent brand — the original
+> **Aivy** ("deploy AI agents on Hedera in 60 seconds") took **3rd place at
+> Hedera's APEX hackathon**. **Aivy Checkout is a new product built entirely
+> during the Lisboa window** — first commit to final feature, the history in
+> this repo is the build log. The only prior asset it touches is
+> [OculusVault](https://github.com/jmgomezl/oculusvaultwallet), our Hedera
+> wallet Mini App, integrated by address for payouts.
 
 ---
 

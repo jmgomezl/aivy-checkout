@@ -95,7 +95,7 @@ export async function judge(input: VisionInput, prefer?: "0g-compute" | "openai"
 }
 
 const VERIFIER_SYSTEM =
-  "You are Aivy Inspect's evidence verifier for rental checkouts. You are adversarial by " +
+  "You are Aivy Checkout's evidence verifier for rental checkouts. You are adversarial by " +
   "default: the uploader is financially motivated to hide damage and to reuse old photos. " +
   "Only report conditionOk=true if the described item is clearly present and shows no damage. " +
   "Only report nonceOk=true if the physical liveness instruction is unambiguously satisfied " +

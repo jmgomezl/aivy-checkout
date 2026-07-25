@@ -1,9 +1,9 @@
-# World ID Integration — Testing Documentation (Aivy Inspect)
+# World ID Integration — Testing Documentation (Aivy Checkout)
 
 Beta-track deliverable: developer + user feedback for Selfie Check / Identity
 Check. Living document — venue sections filled during the hackathon weekend.
 
-## How Aivy Inspect uses World (meaningful use, not login)
+## How Aivy Checkout uses World (meaningful use, not login)
 
 **Assurance tier = economic terms.** A user's World ID verification level sets
 the maximum escrow the platform will hold for them:

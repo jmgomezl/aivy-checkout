@@ -1,4 +1,4 @@
-# AIVY/INSPECT — Pitch Deck & Demo Script
+# AIVY/CHECKOUT — Pitch Deck & Demo Script
 ### ETHGlobal Lisboa · Hedera × World × 0G
 
 ---
@@ -67,7 +67,7 @@ cleaning fee.
 > "Everything you watched is live on Hedera testnet right now:
 > ecrecover-verified verdicts, evidence on 0G with public download links,
 > receipts sealed to HCS topic 0.0.9736741. AI judges the evidence. The chain
-> moves the money. You keep the receipt. **Aivy Inspect — proof for anything
+> moves the money. You keep the receipt. **Aivy Checkout — proof for anything
 > you can photograph.**"
 
 ---
@@ -125,7 +125,7 @@ on anvil (`npm run api` + preview) — rehearse once offline too.
 
 ## SUBMISSION BLURB (paste-ready)
 
-**Aivy Inspect — verifiable inspection receipts for the physical world.**
+**Aivy Checkout — verifiable inspection receipts for the physical world.**
 AI can analyze evidence but can't walk to the apartment. Aivy turns any
 handover dispute — rental deposits, vehicle returns, deliveries, expense
 receipts, shelf audits — into a cryptographic receipt: a verified unique
