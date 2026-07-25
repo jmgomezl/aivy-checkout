@@ -656,3 +656,7 @@ body {
 .stack-strip { display: flex; justify-content: center; gap: 8px; margin: 12px 0 2px; }
 .stack-strip span { flex: 1; max-width: 132px; text-align: center; border: 1px solid #b9b2a2; border-radius: 3px; padding: 6px 4px; font-size: 8.5px; font-weight: 800; letter-spacing: .08em; color: var(--paper-ink); }
 .stack-strip i { display: block; font-style: normal; font-weight: 400; font-size: 7.5px; color: var(--paper-dim); letter-spacing: .04em; margin-top: 2px; }
+
+/* demo sign-out (footer, subtle) */
+.signout { display: block; margin: 14px auto 0; background: none; border: 1px dashed var(--line-hot); border-radius: 4px; color: var(--dim); font: 600 9px var(--display); letter-spacing: .18em; padding: 8px 16px; cursor: pointer; transition: color .2s, border-color .2s; }
+.signout:hover { color: var(--red); border-color: var(--red); }

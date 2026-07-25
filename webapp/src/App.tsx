@@ -516,6 +516,14 @@ export default function App() {
    * that proved itself since its last boot. If it says no, put the QR back
    * rather than leaving someone staring at a rejection they can't act on.
    */
+  /** Demo control: forget this human entirely — clears the World session,
+   *  nullifier, linked wallet and case, and reloads to the gate. Lets the
+   *  full World ID connect flow be shown again on demand. */
+  const signOut = useCallback(() => {
+    ["aivy:verified", "aivy:nullifier", "aivy:payout"].forEach((k) => localStorage.removeItem(k));
+    location.reload();
+  }, []);
+
   const dropVerification = useCallback(() => {
     localStorage.removeItem("aivy:verified");
     setVerified(false);
@@ -1015,6 +1023,11 @@ export default function App() {
         <footer className="colophon">
           ECRECOVER-VERIFIED VERDICTS · EVIDENCE HASHED ON-CHAIN · RECEIPTS SEALED TO HCS
           <br />HEDERA × 0G × WORLD ID — ETHGLOBAL LISBOA
+          {verified && (
+            <button className="signout" onClick={signOut} title="Forget this identity and show the World ID flow again">
+              ⏻ SIGN OUT · NEW IDENTITY
+            </button>
+          )}
         </footer>
       </div>
     </div>
