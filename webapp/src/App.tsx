@@ -316,6 +316,10 @@ export default function App() {
   useEffect(() => {
     tg?.ready?.();
     tg?.expand?.();
+    // the Evidence Lab is dark by design — without this, Telegram frames it in
+    // the viewer's own theme and a light-mode judge gets a white header band
+    tg?.setHeaderColor?.("#07090d");
+    tg?.setBackgroundColor?.("#07090d");
     api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string }>("/api/health").then(setHealth).catch(() => {});
     api<{ templates: TemplateCard[] }>("/api/templates").then((t) => setTemplates(t.templates)).catch(() => {});
   }, []);
