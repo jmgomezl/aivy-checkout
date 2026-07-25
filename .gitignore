@@ -10,6 +10,13 @@ out/
 
 # node
 offchain/node_modules/
+webapp/node_modules/
+
+# build output — rebuilt by scripts/deploy.sh on every deploy
+webapp/dist/
 
 # relayer file-fallback receipts (regenerated per run)
 offchain/receipts/
+
+# evidence blobs from local runs — content-addressed, regenerated, and not ours to publish
+offchain/evidence/
