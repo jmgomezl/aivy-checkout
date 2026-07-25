@@ -3,7 +3,7 @@
 **Verifiable inspection receipts for the physical world — an AI judges the evidence, the chain moves the money, and a human is provably behind every photo.**
 
 AI can analyze evidence perfectly, but it cannot walk to the apartment. Every deposit
-dispute on Earth is two people, two photos, zero proof. Aivy closes that gap: a
+dispute on Earth is two people, two photos, zero proof. Aivy Checkout closes that gap: a
 **verified unique human** captures evidence against a **liveness challenge committed
 on-chain before the photo exists**, a **verifiable AI** signs an itemized verdict, and
 an **escrow releases the money the instant the last item passes** — no counterparty in
@@ -48,7 +48,7 @@ sequenceDiagram
     autonumber
     actor T as Tenant (verified human)
     participant W as World ID
-    participant A as Aivy agent (API + relayer)
+    participant A as Aivy Checkout agent (API + relayer)
     participant AI as Verifier (0G Compute / GPT)
     participant S as 0G Storage
     participant H as Hedera (escrow + HCS)
@@ -80,7 +80,7 @@ flowchart LR
     subgraph Human["🧍 Verified human"]
         TG[Web / Telegram Mini App<br/>camera + IDKit v4]
     end
-    subgraph Agent["🤖 Aivy settlement agent"]
+    subgraph Agent["🤖 Aivy Checkout settlement agent"]
         API[api-server.ts<br/>tiers · templates · geo/time locks]
         REL[relayer.ts<br/>verdict signer]
     end
@@ -112,7 +112,7 @@ knew it was about apartments.
 
 ## ⛓ Hedera — the autonomous escrow that settles at machine speed
 
-**What Aivy is, in Hedera's terms: an AI agent that moves value autonomously.**
+**What Aivy Checkout is, in Hedera's terms: an AI agent that moves value autonomously.**
 It opens escrows, commits challenge hashes, accepts signed AI verdicts, releases
 HBAR the moment conditions verify, and seals every receipt — *hold funds, verify
 delivery via HCS-anchored evidence, auto-release on condition match*. The agentic
@@ -146,7 +146,7 @@ typo can't trap a deposit).
 
 ## 🌐 World — the human layer: who is behind the camera, and how sure are we
 
-**Aivy is a product for verified humans in an AI-assisted interaction** — the exact
+**Aivy Checkout is a product for verified humans in an AI-assisted interaction** — the exact
 thing World's stack exists for. The evidence layer is only as good as the claim that a
 *real, live person* is behind the screen — so we made assurance level do real work:
 
@@ -185,7 +185,7 @@ carries identity for now.
 
 **The verdict that moves the money should not be a trusted API call.** That is 0G's
 entire thesis — *every action cryptographically verified and settled on-chain instead
-of blindly trusted* — and Aivy applies it to the exact judgement where trust is
+of blindly trusted* — and Aivy Checkout applies it to the exact judgement where trust is
 weakest: an AI deciding whether your photo releases someone's deposit.
 
 | 0G piece | How we use it | Proof |

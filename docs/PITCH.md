@@ -126,7 +126,7 @@ on anvil (`npm run api` + preview) — rehearse once offline too.
 ## SUBMISSION BLURB (paste-ready)
 
 **Aivy Checkout — verifiable inspection receipts for the physical world.**
-AI can analyze evidence but can't walk to the apartment. Aivy turns any
+AI can analyze evidence but can't walk to the apartment. Aivy Checkout turns any
 handover dispute — rental deposits, vehicle returns, deliveries, expense
 receipts, shelf audits — into a cryptographic receipt: a verified unique
 human (World ID, with Selfie Check assurance tiers that set escrow caps)
