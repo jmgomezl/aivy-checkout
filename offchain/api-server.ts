@@ -480,6 +480,12 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
   log.push({
     item: item.name,
     verdict: verdict.pass ? "PASS" : "FAIL",
+    // which brain decided, and — when it was 0G Compute — whether the enclave
+    // signature verified. This rides into the HCS receipt, so "our inference is
+    // TEE-sealed" is something a reader can check rather than take on trust.
+    brain: verdict.brain,
+    teeVerified: verdict.teeVerified ?? null,
+    computeModel: verdict.computeModel ?? null,
     imageHash: stored.imageHash,
     evidenceUri: stored.uri,
     signature: sig,

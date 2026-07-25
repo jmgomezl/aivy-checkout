@@ -34,6 +34,12 @@ export interface VisionVerdict {
   nonceOk: boolean;
   reason: string;
   brain: "0g-compute" | "openai" | "claude" | "mock";
+  // set only by the 0G Compute path: whether the enclave signature over this
+  // response actually verified, and which sealed model produced it. Carried
+  // through to the HCS receipt so the claim is checkable, not asserted.
+  teeVerified?: boolean;
+  computeProvider?: string;
+  computeModel?: string;
 }
 
 const VERDICT_SCHEMA = {
@@ -62,6 +68,16 @@ const MEDIA: Record<string, string> = {
 };
 
 export async function judge(input: VisionInput): Promise<VisionVerdict> {
+  // 0G Compute first when enabled: a verdict signed inside a TEE is the one
+  // worth putting on the receipt. It returns null rather than throwing when the
+  // network, ledger or provider is unavailable, so the brains below stay the
+  // safety net — a settlement demo must not die with an inference provider.
+  if (process.env.ZEROG_COMPUTE === "1") {
+    const { judgeOn0gCompute } = await import("./compute-0g.js");
+    const mediaType = MEDIA[extname(input.imagePath).toLowerCase()] ?? "image/jpeg";
+    const sealed = await judgeOn0gCompute(input, readFileSync(input.imagePath).toString("base64"), mediaType);
+    if (sealed) return sealed;
+  }
   // Throws when nothing is configured: the mock passes any image whose filename
   // lacks "damaged", so it must never silently decide a real settlement.
   switch (resolveBrain(process.env)) {

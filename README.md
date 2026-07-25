@@ -65,8 +65,25 @@ Digest = `personal_sign(keccak256(abi.encode(fields)))`, matching ethers
 verdict check, and the auto-release all live in `CheckoutEscrow.sol`. Receipts are
 sealed to HCS by the relayer, because the EVM cannot write HCS directly.
 
-**0G** — evidence blobs upload to 0G Storage and receipts link to the indexer by root.
-Uploads are budgeted rather than awaited (see *Engineering notes*).
+**0G** — two layers.
+
+*Storage* (live): evidence blobs upload to 0G Storage via
+`@0gfoundation/0g-storage-ts-sdk` and receipts link to the indexer by root. Uploads are
+budgeted rather than awaited (see *Engineering notes*).
+
+*Compute / Private Computer* (implemented, gated on `ZEROG_COMPUTE=1`): the verdict that
+releases the deposit runs on the network's multimodal TEE service —
+`qwen/qwen2.5-omni-7b`, verifiability `TeeML` — through
+`@0gfoundation/0g-compute-ts-sdk`. The enclave signs its response and
+`broker.inference.processResponse` verifies that signature client-side; the result is
+written into the evidence log as `teeVerified` and sealed to HCS with the rest of the
+receipt, so the claim is checkable on-chain rather than asserted here. On any provider
+error, timeout, or unparseable answer the call returns null and the conventional vision
+brain decides instead — and the receipt records which brain actually did, because a
+fallback verdict is not a TEE verdict and should not be presented as one.
+
+`npm run probe:compute` validates the whole path (ledger, provider handshake, image
+request, signature verification) before it is switched on.
 
 **World ID** — one human, one live checkout. The nullifier is the sybil key: no
 documents, no wallet-per-person assumption. Device-level verification, so any World
