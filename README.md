@@ -18,7 +18,7 @@ Built at **ETHGlobal Lisboa**.
 |---|---|
 | Web | **https://checkout.aivylabs.xyz** |
 | Telegram Mini App | **https://t.me/aivycheckout_bot** |
-| Chain | Hedera testnet — escrow [`0x3516a9d9bb6cC6D1B565Ea228137DCB7FdddE269`](https://hashscan.io/testnet/contract/0x3516a9d9bb6cC6D1B565Ea228137DCB7FdddE269) |
+| Chain | Hedera testnet — escrow [`0x83B55906c6359c3f43Bf95cb8Cdef4455DB68226`](https://hashscan.io/testnet/contract/0x83B55906c6359c3f43Bf95cb8Cdef4455DB68226) |
 | HCS receipts | topic [`0.0.9736741`](https://hashscan.io/testnet/topic/0.0.9736741) |
 | Proof of personhood | World ID `app_952df7edf32b602c03c445e6732ea04a`, action `aivy-checkout` |
 
@@ -31,7 +31,7 @@ receipt links to HashScan.
 
 | what | address |
 |---|---|
-| `CheckoutEscrow` | [`0x3516a9d9bb6cC6D1B565Ea228137DCB7FdddE269`](https://hashscan.io/testnet/contract/0x3516a9d9bb6cC6D1B565Ea228137DCB7FdddE269) |
+| `CheckoutEscrow` | [`0x83B55906c6359c3f43Bf95cb8Cdef4455DB68226`](https://hashscan.io/testnet/contract/0x83B55906c6359c3f43Bf95cb8Cdef4455DB68226) |
 | Relayer / authorized verdict signer | [`0x44f7769bFB6E872f491CcF0B655Bee8c06A640a0`](https://hashscan.io/testnet/account/0x44f7769bFB6E872f491CcF0B655Bee8c06A640a0) |
 | HCS receipt topic | [`0.0.9736741`](https://hashscan.io/testnet/topic/0.0.9736741) |
 
@@ -147,11 +147,13 @@ existed. Same escrow, same verdict signature, different fraud.
 ## Tests
 
 ```bash
-forge test          # 17 passed, 0 failed
+forge test          # 22 passed, 0 failed
 ```
 
 Covering the happy path, FAIL-keeps-funds-locked, timeout→host, replay, wrong signer,
-uncommitted nonce, wrong deposit, and the relayer→TEE signer swap.
+uncommitted nonce, wrong deposit, the registrar gate, and the relayer→TEE signer swap.
+`cd offchain && npm test` runs 30 more over the guards (key resolution, personhood
+mode, nonce generation, prompt sanitising).
 
 ```bash
 anvil &                            # local chain
@@ -183,6 +185,9 @@ Things that cost real time and are easy to get wrong again:
   as noise; a placed object reads as a placed object. And item descriptions must
   describe structural damage, not wear — "no scratches" on venue furniture fails
   honestly, forever.
+- **`createCheckout` is registrar-gated.** Without it anyone could squat an unused
+  `checkoutId`, register themselves as host with a deadline a second away, and take the
+  deposit through `resolveTimeout`. The deployer is the first registrar.
 - **Hedera payouts need an existing account.** A transfer to an address with no Hedera
   account reverts and would trap the deposit, so payout targets are checked against
   the mirror node first.
