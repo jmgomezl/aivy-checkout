@@ -589,12 +589,19 @@ export default function App() {
 
         {/* ─── ARCHIVE: past cases, replayed from HCS ───────────────── */}
         {verified && !checkout && !picked && !building && archive.length > 0 && (
-          <section className="panel archive reveal d3">
-            <h2 className="panel-title">EVERY CASE<br />STAYS PROVABLE.</h2>
-            <p className="panel-copy">
-              These aren't rows in our database — they're the receipts themselves, read back
-              from Hedera Consensus Service. Anyone with the topic can replay them.
-            </p>
+          <>
+            {/* a judge should never mistake the archive for the live flow —
+                break the page here, drop the lime accent, go read-only */}
+            <div className="section-break"><span>ARCHIVE</span></div>
+            <section className="archive-zone reveal d3">
+              <div className="archive-head">
+                <h2 className="archive-title">EVERY CASE STAYS PROVABLE.</h2>
+                <span className="archive-tag">READ-ONLY</span>
+              </div>
+              <p className="archive-copy">
+                Not rows in our database — the receipts themselves, read back from Hedera
+                Consensus Service. Anyone with the topic can replay them.
+              </p>
             <ul className="arch-list">
               {archive.map((h) => (
                 <li key={h.sequence} className="arch-row">
@@ -620,12 +627,13 @@ export default function App() {
                 </li>
               ))}
             </ul>
-            {health?.hcsTopic && explorerBase(health?.network ?? "") && (
-              <a className="hashlink arch-topic" href={`${explorerBase(health?.network ?? "")}/topic/${health.hcsTopic}`} target="_blank" rel="noreferrer">
-                OPEN TOPIC {health.hcsTopic} ON HASHSCAN ↗
-              </a>
-            )}
-          </section>
+              {health?.hcsTopic && explorerBase(health?.network ?? "") && (
+                <a className="hashlink arch-topic" href={`${explorerBase(health?.network ?? "")}/topic/${health.hcsTopic}`} target="_blank" rel="noreferrer">
+                  OPEN TOPIC {health.hcsTopic} ON HASHSCAN ↗
+                </a>
+              )}
+            </section>
+          </>
         )}
 
         {/* ─── BUILDER: custom inspection ───────────────────────────── */}
