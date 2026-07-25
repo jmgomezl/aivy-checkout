@@ -111,9 +111,14 @@ let nextCheckoutId = Math.floor(Date.now() / 1000) % 1_000_000; // unique-ish pe
 
 // sybil gate: one human -> one active demo checkout
 const humanToCheckout = new Map<string, number>();
+// single-login UX: first wallet a human provides is remembered forever
+const nullifierWallet = new Map<string, string>();
 // nullifiers that passed a REAL World ID proof this boot (live mode only)
 const verifiedNullifiers = new Set<string>();
-const checkoutMeta = new Map<number, { items: TemplateItem[]; tenant: string; template: string; icon: string }>();
+const checkoutMeta = new Map<
+  number,
+  { items: TemplateItem[]; tenant: string; template: string; icon: string; noncesReady?: Promise<void> }
+>();
 const evidenceLog = new Map<number, Array<Record<string, unknown>>>();
 
 const ARTIFACT = JSON.parse(
@@ -178,8 +183,12 @@ async function verifyHuman(body: any): Promise<{ ok: boolean; nullifier: string;
  * address with NO existing account reverts — which would trap the deposit
  * until the timeout. So a custom payout target must exist on-chain first.
  */
-async function resolvePayout(tenantAddress?: string): Promise<string> {
-  if (!tenantAddress) return Wallet.createRandom().address; // demo throwaway
+async function resolvePayout(nullifier: string, tenantAddress?: string): Promise<string> {
+  if (!tenantAddress) {
+    const linked = nullifierWallet.get(nullifier);
+    if (linked) return linked;                      // remembered from last time
+    return Wallet.createRandom().address;           // demo throwaway
+  }
   if (!isAddress(tenantAddress)) throw new Error("invalid payout address");
   const addr = getAddress(tenantAddress);
   if (network.startsWith("hedera")) {
@@ -191,6 +200,7 @@ async function resolvePayout(tenantAddress?: string): Promise<string> {
       );
     }
   }
+  nullifierWallet.set(nullifier, addr); // link once — never ask this human again
   return addr;
 }
 
@@ -221,7 +231,7 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   }
 
   const id = nextCheckoutId++;
-  const tenant = await resolvePayout(tenantAddress);
+  const tenant = await resolvePayout(nullifier, tenantAddress);
   // HEDERA GOTCHA: inside Hedera's EVM, msg.value is in tinybar (8 decimals),
   // while the JSON-RPC relay takes tx value in 18-decimal weibar. So the
   // stored deposit must be tinybar-scaled on Hedera or the == check reverts.
@@ -232,16 +242,29 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   const deadline = chainNow + 30 * 60;
 
   await (await escrow.getFunction("createCheckout")(id, tenant, deposit, deadline, items.map((i) => itemIdOf(i.name)))).wait();
-  for (const it of items) {
-    await (await escrow.getFunction("commitNonce")(id, itemIdOf(it.name), keccak256(toUtf8Bytes(it.nonce)))).wait();
-  }
   // demo: relayer funds the deposit on the tenant's behalf via direct call
   // (tx value always 18-dec through the RPC layer; Hedera relay converts)
   const txValue = isHedera ? parseEther("2") : deposit;
   await (await escrow.getFunction("deposit")(id, { value: txValue })).wait();
 
+  // The liveness nonces aren't needed until the tenant submits their first
+  // photo, which is >30s away — but on Hedera every tx costs ~5s of consensus,
+  // so awaiting three of them here doubled the wait the human actually sees.
+  // Commit them in the background instead; submitEvidence awaits this promise
+  // before it reads a commitment, so the ordering guarantee is unchanged.
+  // (commitNonce accepts Created OR Funded, so post-deposit is legal.)
+  // Sends stay sequential: Hedera's relay rejects future-nonce txs outright
+  // rather than queueing them the way geth does.
+  const noncesReady = (async () => {
+    for (const it of items) {
+      await (await escrow.getFunction("commitNonce")(id, itemIdOf(it.name), keccak256(toUtf8Bytes(it.nonce)))).wait();
+    }
+  })();
+  // keep the rejection from going unhandled; submitEvidence re-awaits and surfaces it
+  noncesReady.catch((e) => console.error(`[api] checkout ${id} nonce commit failed —`, e?.message ?? e));
+
   humanToCheckout.set(nullifier, id);
-  checkoutMeta.set(id, { items, tenant, template: tpl ? tpl.title : "Custom Inspection", icon: tpl ? tpl.icon : "🛠" });
+  checkoutMeta.set(id, { items, tenant, template: tpl ? tpl.title : "Custom Inspection", icon: tpl ? tpl.icon : "🛠", noncesReady });
   console.log(`[api] checkout ${id} created for human ${nullifier.slice(0, 12)}… tenant=${tenant}`);
   return describeCheckout(id);
 }
@@ -279,6 +302,10 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
   if (humanToCheckout.get(nullifier) !== id) throw new Error("this human is not the tenant of this checkout");
   const item = meta.items.find((i) => i.name === itemName);
   if (!item) throw new Error("unknown item");
+
+  // createDemoCheckout returns before the nonce commits land (see there);
+  // this is the point where they must be on-chain.
+  if (meta.noncesReady) await meta.noncesReady;
 
   // decode data URL -> tmp file
   const m = /^data:(image\/\w+);base64,(.+)$/s.exec(imageDataUrl ?? "");
@@ -337,6 +364,7 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
     brain: verdict.brain,
     imageHash: stored.imageHash,
     evidenceUri: stored.uri,
+    storageRoot: stored.root ?? null,
     storageBackend: stored.backend,
     signature: sig,             // the verifier's secp256k1 signature over the verdict
     verifier: relayerWallet.address,
@@ -432,7 +460,7 @@ const server = createServer(async (req, res) => {
     }
     if (path === "/api/verify-human" && req.method === "POST") {
       const out = await verifyHuman(await readBody(req));
-      return json(res, out.ok ? 200 : 400, out);
+      return json(res, out.ok ? 200 : 400, { ...out, linkedWallet: out.ok ? nullifierWallet.get(out.nullifier) ?? null : null });
     }
     if (path === "/api/templates" && req.method === "GET") {
       return json(res, 200, { templates: TEMPLATES.map(({ id, title, payer, blurb, icon, items }) => ({ id, title, payer, blurb, icon, itemCount: items.length })) });

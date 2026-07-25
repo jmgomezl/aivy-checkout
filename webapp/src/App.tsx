@@ -30,6 +30,7 @@ type EvidenceResult = {
   brain: string;
   imageHash: string;
   evidenceUri: string;
+  storageRoot?: string | null;
   signature: string;
   verifier: string;
   txHash?: string;
@@ -97,6 +98,76 @@ function PipelineTicker() {
       {PIPELINE[i]}
       <span className="cursor">▌</span>
     </span>
+  );
+}
+
+/**
+ * Opening a checkout costs two Hedera transactions at ~5s of consensus each —
+ * dead air unless you narrate it. Every row here is a real call the relayer is
+ * making right now, timed to what the mirror node actually reports. The last
+ * row deliberately outlives this component: commitNonce runs in the background
+ * (see createDemoCheckout) and is awaited later, at the first evidence upload.
+ */
+const SETTLE_STEPS = [
+  {
+    label: "OPENING THE CASE FILE",
+    call: "createCheckout()",
+    note: "required items + a 30-minute deadline, written on-chain",
+  },
+  {
+    label: "LOCKING THE DEPOSIT",
+    call: "deposit()",
+    note: "2 ℏ held by the contract — not by the host, not by us",
+  },
+  {
+    label: "SEALING THE LIVENESS CHALLENGES",
+    call: "commitNonce()",
+    note: "hashed now, revealed only at capture — that's the anti-replay",
+  },
+];
+const SETTLE_STEP_MS = 5400; // measured: ~5s per tx on Hedera testnet
+
+function SettlementTicker({ items }: { items: number }) {
+  const [step, setStep] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const t0 = Date.now();
+    const tick = setInterval(() => setElapsed((Date.now() - t0) / 1000), 100);
+    const timers = [1, 2].map((n) => setTimeout(() => setStep(n), SETTLE_STEP_MS * n));
+    return () => {
+      clearInterval(tick);
+      timers.forEach(clearTimeout);
+    };
+  }, []);
+
+  return (
+    <div className="settle">
+      <div className="settle-head">
+        <span className="settle-title">SETTLING ON HEDERA</span>
+        <span className="settle-clock">{elapsed.toFixed(1)}s</span>
+      </div>
+      <ol className="settle-steps">
+        {SETTLE_STEPS.map((s, i) => (
+          <li key={s.call} className={i < step ? "done" : i === step ? "active" : "pending"}>
+            <span className="settle-mark">{i < step ? "✓" : i === step ? <span className="settle-spin" /> : "○"}</span>
+            <div>
+              <div className="settle-label">
+                {s.label}
+                <code>{i === 2 ? `${s.call} ×${items}` : s.call}</code>
+              </div>
+              <div className="settle-note">{s.note}</div>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div className="settle-bar">
+        {/* creep toward — never quite reach — the two-tx estimate; the real
+            response is what ends this, and Hedera occasionally runs long */}
+        <span style={{ width: `${Math.min(96, (elapsed / ((SETTLE_STEP_MS * 2) / 1000)) * 100)}%` }} />
+      </div>
+      <p className="settle-foot">THE RELAYER PAYS THE GAS · THE TENANT NEVER SIGNS A TRANSACTION</p>
+    </div>
   );
 }
 
@@ -184,7 +255,7 @@ function Receipt({
                 <div className="paper-item-body">
                   {thumbs[item.name] && <img className="paper-thumb" src={thumbs[item.name]} alt={item.name} />}
                   <table className="paper-kv"><tbody>
-                    <tr><td>evidence</td><td><Hash value={r.storageBackend === "0g" ? r.evidenceUri.replace("0g://", "") : r.imageHash} href={cidHref} chars={16} /></td></tr>
+                    <tr><td>{r.storageBackend === "0g" ? <>0g&nbsp;root</> : "evidence"}</td><td><Hash value={r.storageRoot ?? r.imageHash} href={cidHref} chars={16} /></td></tr>
                     <tr><td>ai&nbsp;verdict</td><td>undamaged · nonce&nbsp;detected</td></tr>
                     <tr><td>signature</td><td><Hash value={r.signature} chars={16} /></td></tr>
                     {r.txHash && <tr><td>verdict&nbsp;tx</td><td><Hash value={r.txHash} href={exp ? `${exp}/transaction/${r.txHash}` : null} chars={16} /></td></tr>}
@@ -240,6 +311,7 @@ export default function App() {
   const [building, setBuilding] = useState(false);
   const [draft, setDraft] = useState<DraftItem[]>([{ name: "", desc: "", nonce: "" }]);
   const starting = useRef(false);
+  const [settling, setSettling] = useState(false);
 
   useEffect(() => {
     tg?.ready?.();
@@ -251,7 +323,8 @@ export default function App() {
   const verify = useCallback(async () => {
     setError("");
     try {
-      await api("/api/verify-human", { nullifier });
+      const out = await api<{ linkedWallet?: string | null }>("/api/verify-human", { nullifier });
+      if (out.linkedWallet && !payout) setPayout(out.linkedWallet);
       setVerified(true);
       tg?.HapticFeedback?.notificationOccurred?.("success");
     } catch (e: any) {
@@ -262,7 +335,8 @@ export default function App() {
   const onWorldIdSuccess = useCallback(async (proof: ISuccessResult) => {
     setError("");
     try {
-      const out = await api<{ ok: boolean; nullifier: string }>("/api/verify-human", { proof });
+      const out = await api<{ ok: boolean; nullifier: string; linkedWallet?: string | null }>("/api/verify-human", { proof });
+      if (out.linkedWallet && !payout) setPayout(out.linkedWallet);
       setNullifier(out.nullifier);
       localStorage.setItem("aivy:nullifier", out.nullifier);
       setVerified(true);
@@ -270,11 +344,12 @@ export default function App() {
     } catch (e: any) {
       setError("World ID verification failed: " + e.message);
     }
-  }, [setNullifier]);
+  }, [setNullifier, payout]);
 
   const start = useCallback(async () => {
     if (starting.current) return;
     starting.current = true;
+    setSettling(true);
     setError("");
     try {
       const addr = payout.trim();
@@ -287,6 +362,7 @@ export default function App() {
       setError(e.message);
     } finally {
       starting.current = false;
+      setSettling(false);
     }
   }, [nullifier, payout, picked, building, draft]);
 
@@ -424,10 +500,18 @@ export default function App() {
             {draft.length < 8 && (
               <button className="draft-add" onClick={() => setDraft([...draft, { name: "", desc: "", nonce: "" }])}>+ ADD CHECK</button>
             )}
-            <div className="payout">
-              <label className="fine" htmlFor="payout2">PAYOUT WALLET (OPTIONAL)</label>
-              <input id="payout2" className="addr" placeholder="0x…" value={payout} onChange={(e) => setPayout(e.target.value)} spellCheck={false} />
-            </div>
+            {payout ? (
+              <div className="linked">
+                <span className="fine">PAYS TO</span>
+                <span className="linked-addr">{payout.slice(0, 10)}…{payout.slice(-6)} <b className="ink-lime">✓ LINKED</b></span>
+                <button className="linked-change" onClick={() => setPayout("")}>CHANGE</button>
+              </div>
+            ) : (
+              <div className="payout">
+                <label className="fine" htmlFor="payout2">PAYOUT WALLET (OPTIONAL)</label>
+                <input id="payout2" className="addr" placeholder="0x…" value={payout} onChange={(e) => setPayout(e.target.value)} spellCheck={false} />
+              </div>
+            )}
             <button className="cta" onClick={start}>ESCROW &amp; BEGIN</button>
           </section>
         )}
@@ -442,22 +526,34 @@ export default function App() {
               Locked in a Hedera smart contract. Pass every check and the
               contract pays out <em>the second</em> the last verdict lands. No counterparty mood. No 30-day wait.
             </p>
-            <div className="payout">
-              <label className="fine" htmlFor="payout">PAYOUT WALLET — YOUR OCULUSVAULT ADDRESS (OPTIONAL)</label>
-              <input
-                id="payout"
-                className="addr"
-                placeholder="0x…  leave empty for a demo wallet"
-                value={payout}
-                onChange={(e) => setPayout(e.target.value)}
-                spellCheck={false}
-                autoComplete="off"
-              />
-              <p className="fine">
-                No wallet? <a className="hashlink" href="https://t.me/oculusvaultbot/app" target="_blank" rel="noreferrer">OPEN OCULUSVAULT ↗</a> — the deposit pays straight into it.
-              </p>
-            </div>
-            <button className="cta" onClick={start}>BEGIN CHECKOUT</button>
+            {payout ? (
+              <div className="linked">
+                <span className="fine">PAYS TO</span>
+                <span className="linked-addr">{payout.slice(0, 10)}…{payout.slice(-6)} <b className="ink-lime">✓ LINKED</b></span>
+                <button className="linked-change" onClick={() => setPayout("")}>CHANGE</button>
+              </div>
+            ) : (
+              <div className="payout">
+                <label className="fine" htmlFor="payout">PAYOUT WALLET — LINK ONCE, NEVER ASKED AGAIN (OPTIONAL)</label>
+                <input
+                  id="payout"
+                  className="addr"
+                  placeholder="0x…  leave empty for a demo wallet"
+                  value={payout}
+                  onChange={(e) => setPayout(e.target.value)}
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+                <p className="fine">
+                  No wallet? <a className="hashlink" href="https://t.me/oculusvaultbot/app" target="_blank" rel="noreferrer">OPEN OCULUSVAULT ↗</a> — the deposit pays straight into it.
+                </p>
+              </div>
+            )}
+            {settling ? (
+              <SettlementTicker items={building ? draft.length : picked?.itemCount ?? 3} />
+            ) : (
+              <button className="cta" onClick={start}>BEGIN CHECKOUT</button>
+            )}
           </section>
         )}
 

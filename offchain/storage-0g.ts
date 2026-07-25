@@ -13,7 +13,8 @@ import { extname } from "node:path";
 
 export interface StoredEvidence {
   imageHash: string;   // 0x keccak256 of the blob — what the TEE/relayer signs
-  uri: string;         // 0g root hash URI, or file:// fallback
+  uri: string;         // public download URL (0G indexer) or file:// fallback
+  root?: string;       // 0G merkle root (when backend === "0g")
   backend: "0g" | "local";
 }
 
@@ -21,7 +22,7 @@ export async function storeEvidence(imagePath: string): Promise<StoredEvidence> 
   const blob = readFileSync(imagePath);
   const imageHash = keccak256(blob);
 
-  if (process.env.ZEROG_INDEXER_URL && process.env.ZEROG_PRIVATE_KEY) {
+  if (process.env.ZEROG_PRIVATE_KEY) {
     try {
       return await storeOn0g(imagePath, imageHash);
     } catch (e) {
@@ -42,24 +43,25 @@ export async function storeEvidence(imagePath: string): Promise<StoredEvidence> 
 }
 
 async function storeOn0g(imagePath: string, imageHash: string): Promise<StoredEvidence> {
-  // Lazy import: SDK only needed when creds are present.
-  // API per @0glabs/0g-ts-sdk README — verify at the venue with probe-0g.ts.
-  const zg = await import("@0glabs/0g-ts-sdk" as string);
+  // NOTE: the maintained SDK is @0gfoundation/0g-storage-ts-sdk — the old
+  // @0glabs/0g-ts-sdk (0.3.x) targets a retired flow contract and its
+  // submit tx reverts on Galileo (chain 16602). Cost us an hour; keep this note.
+  const zg = await import("@0gfoundation/0g-storage-ts-sdk" as string);
   const { ethers } = await import("ethers");
 
-  const provider = new ethers.JsonRpcProvider(process.env.ZEROG_RPC_URL);
+  const rpc = process.env.ZEROG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
+  const indexerUrl = process.env.ZEROG_INDEXER_URL ?? "https://indexer-storage-testnet-turbo.0g.ai";
+  const provider = new ethers.JsonRpcProvider(rpc);
   const signer = new ethers.Wallet(process.env.ZEROG_PRIVATE_KEY!, provider);
-  const indexer = new zg.Indexer(process.env.ZEROG_INDEXER_URL!);
+  const indexer = new zg.Indexer(indexerUrl);
 
   const file = await zg.ZgFile.fromFilePath(imagePath);
-  const [tree, treeErr] = await file.merkleTree();
-  if (treeErr) throw treeErr;
-
-  const [tx, uploadErr] = await indexer.upload(file, process.env.ZEROG_RPC_URL!, signer);
-  if (uploadErr) throw uploadErr;
+  const [res, uploadErr] = await indexer.upload(file, rpc, signer);
   await file.close();
+  if (uploadErr) throw uploadErr;
 
-  const root = tree!.rootHash();
-  console.log(`[storage] ✅ uploaded to 0G Storage root=${root} tx=${tx}`);
-  return { imageHash, uri: `0g://${root}`, backend: "0g" };
+  const root = res.rootHash;
+  console.log(`[storage] ✅ 0G Storage root=${root} tx=${res.txHash} seq=${res.txSeq}`);
+  // the indexer serves blobs publicly by root — receipt links resolve for anyone
+  return { imageHash, uri: `${indexerUrl}/file?root=${root}`, root, backend: "0g" };
 }
