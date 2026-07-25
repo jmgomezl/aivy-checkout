@@ -73,6 +73,22 @@ const TEMPLATES: Template[] = [
     ],
   },
   {
+    // Not an object's condition but a document's authenticity — the same
+    // machinery, pointed at expense fraud: screenshots of screens, the same
+    // receipt claimed twice, totals edited after the fact. A challenge
+    // committed on-chain before the photo exists defeats the first two,
+    // because a stored image cannot satisfy a challenge nobody had published.
+    id: "expense_receipt",
+    title: "Expense Receipt",
+    payer: "finance teams & expense platforms",
+    blurb: "Claimant proves the receipt is real and in hand; the reimbursement releases itself.",
+    icon: "🧾",
+    items: [
+      { name: "receipt_total", desc: "printed receipt with a legible total and date, photographed as paper and not as a screen", nonce: "hold the receipt flat with your thumb at the bottom edge" },
+      { name: "receipt_header", desc: "the same receipt showing the venue name across the top", nonce: "lay a yellow pen across the top of the receipt" },
+    ],
+  },
+  {
     id: "vehicle_return",
     title: "Vehicle Return",
     payer: "rental fleets & insurers",

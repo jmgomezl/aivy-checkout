@@ -80,12 +80,19 @@ handover.
 | Template | Who pays for it |
 |---|---|
 | Rental Checkout *(flagship)* | hosts & property managers |
+| Expense Receipt | finance teams & expense platforms |
 | Vehicle Return | rental fleets & insurers |
 | Scooter Return | micromobility fleets & insurers |
 | Delivery Handover | merchants & 3PLs |
 | Retail Shelf Audit | CPG brands & distributors |
 
 Plus a custom builder: define your own items and liveness challenges in the app.
+
+Note what Expense Receipt changes: the subject stops being an object's condition and
+becomes a document's authenticity. Expense fraud is largely photographing a screen,
+claiming the same receipt twice, and editing totals — and a challenge committed
+on-chain *before* the photo exists cannot be satisfied by an image that already
+existed. Same escrow, same verdict signature, different fraud.
 
 ## Tests
 

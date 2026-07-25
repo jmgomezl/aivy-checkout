@@ -106,6 +106,7 @@ async function fileToJpegDataUrl(f: File, maxEdge = 1600, quality = 0.85): Promi
 
 const ITEM_ICON: Record<string, string> = {
   chair: "🪑", laptop: "💻", table: "🍽", espresso_machine: "☕", bedroom_door: "🚪",
+  receipt_total: "🧾", receipt_header: "🏷",
   front_bumper: "🚗", driver_side: "🪞", dashboard: "🎛",
   scooter_deck: "🛴", brake_lever: "🖐", battery_readout: "🔋",
   parcel_intact: "📦", label_visible: "🏷", product_facing: "🛒",
