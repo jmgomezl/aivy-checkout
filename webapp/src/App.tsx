@@ -341,6 +341,7 @@ export default function App() {
   const [building, setBuilding] = useState(false);
   const [draft, setDraft] = useState<DraftItem[]>([{ name: "", desc: "", nonce: "" }]);
   const starting = useRef(false);
+  const wantFresh = useRef(false);
   const [settling, setSettling] = useState(false);
 
   useEffect(() => {
@@ -380,6 +381,26 @@ export default function App() {
     }
   }, [setNullifier, payout]);
 
+  /**
+   * Practice runs need a way out that isn't "close the Mini App". Clearing the
+   * case drops you back at the use-case picker; wantFresh then stops the server
+   * resuming the case you just walked away from (see createDemoCheckout) —
+   * otherwise the next run inherits its already-passed items and can't redo them.
+   */
+  const resetDemo = useCallback(() => {
+    wantFresh.current = true;
+    setCheckout(null);
+    setResults({});
+    setThumbs({});
+    setShowReceipt(false);
+    setReleasedAt(null);
+    setPicked(null);
+    setBuilding(false);
+    setError("");
+    tg?.HapticFeedback?.impactOccurred?.("light");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
   const start = useCallback(async () => {
     if (starting.current) return;
     starting.current = true;
@@ -389,6 +410,10 @@ export default function App() {
       const addr = payout.trim();
       if (addr) localStorage.setItem("aivy:payout", addr);
       const payload: any = { nullifier, tenantAddress: addr || undefined };
+      if (wantFresh.current) {
+        payload.fresh = true;
+        wantFresh.current = false;
+      }
       if (building) payload.customItems = draft;
       else if (picked) payload.templateId = picked.id;
       setCheckout(await api<Checkout>("/api/demo/checkout", payload));
@@ -609,11 +634,16 @@ export default function App() {
               </div>
             </section>
 
+            <button className="case-exit" onClick={resetDemo}>
+              {released ? "▸  RUN ANOTHER CHECKOUT" : "←  BACK TO USE CASES"}
+            </button>
+
             {released && (
               <section className="panel released reveal">
                 <h2 className="panel-title glow">DEPOSIT<br />RELEASED.</h2>
                 <p className="panel-copy">Funds hit the payout wallet the moment the last signed verdict cleared the contract.</p>
                 <button className="cta" onClick={() => setShowReceipt(true)}>🧾 PRINT THE RECEIPT</button>
+                <button className="case-exit" onClick={resetDemo}>▸&nbsp;&nbsp;RUN ANOTHER CHECKOUT</button>
               </section>
             )}
 

@@ -236,14 +236,17 @@ function sanitizeCustomItems(raw: any): TemplateItem[] {
   });
 }
 
-async function createDemoCheckout(nullifier: string, tenantAddress?: string, templateId?: string, customItems?: any) {
+async function createDemoCheckout(nullifier: string, tenantAddress?: string, templateId?: string, customItems?: any, fresh = false) {
   // one human, one live checkout — the World ID nullifier is the sybil key
   const tpl = customItems ? null : (templateById(templateId ?? "rental_checkout") ?? TEMPLATES[0]);
   const items = customItems ? sanitizeCustomItems(customItems) : tpl!.items;
   const names = new Set(items.map((i) => i.name));
   if (names.size !== items.length) throw new Error("duplicate item names");
 
-  const existing = humanToCheckout.get(nullifier);
+  // Resume exists so a page reload mid-checkout doesn't strand the case. But
+  // when the human explicitly walked out of it, resuming would hand them back
+  // items that already passed — and those can't be re-submitted (AlreadyPassed).
+  const existing = fresh ? undefined : humanToCheckout.get(nullifier);
   if (existing && checkoutMeta.has(existing)) {
     const meta0 = checkoutMeta.get(existing)!;
     const c = await escrow.getFunction("getCheckout")(existing);
@@ -506,7 +509,8 @@ const server = createServer(async (req, res) => {
         human.nullifier,
         body.tenantAddress ? String(body.tenantAddress) : undefined,
         body.templateId ? String(body.templateId) : undefined,
-        body.customItems
+        body.customItems,
+        Boolean(body.fresh)
       ));
     }
     const mGet = /^\/api\/checkout\/(\d+)$/.exec(path);
