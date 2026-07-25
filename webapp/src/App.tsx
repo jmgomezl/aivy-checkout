@@ -32,6 +32,7 @@ type EvidenceResult = {
   txHash?: string;
   verifiedAt: string;
   storageBackend: string;
+  hcsSeal?: { topicId: string; sequence: string } | null;
   checkout: Checkout;
 };
 
@@ -187,6 +188,15 @@ function Receipt({
               <span className="mono muted tiny">pending — set HCS_TOPIC_ID</span>
             )}
           </div>
+          {(() => {
+            const seal = Object.values(results).map((r) => r.hcsSeal).filter(Boolean).pop();
+            return seal ? (
+              <div className="kv">
+                <span>Receipt sealed</span>
+                <b className="passtext">✓ consensus seq #{seal.sequence}</b>
+              </div>
+            ) : null;
+          })()}
           <div className="kv">
             <span>Paid to</span>
             <Hash value={checkout.tenant} href={exp ? `${exp}/account/${checkout.tenant}` : null} />
