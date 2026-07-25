@@ -71,19 +71,30 @@ sealed to HCS by the relayer, because the EVM cannot write HCS directly.
 `@0gfoundation/0g-storage-ts-sdk` and receipts link to the indexer by root. Uploads are
 budgeted rather than awaited (see *Engineering notes*).
 
-*Compute / Private Computer* (implemented, gated on `ZEROG_COMPUTE=1`): the verdict that
-releases the deposit runs on the network's multimodal TEE service —
-`qwen/qwen2.5-omni-7b`, verifiability `TeeML` — through
-`@0gfoundation/0g-compute-ts-sdk`. The enclave signs its response and
-`broker.inference.processResponse` verifies that signature client-side; the result is
-written into the evidence log as `teeVerified` and sealed to HCS with the rest of the
-receipt, so the claim is checkable on-chain rather than asserted here. On any provider
-error, timeout, or unparseable answer the call returns null and the conventional vision
-brain decides instead — and the receipt records which brain actually did, because a
-fallback verdict is not a TEE verdict and should not be presented as one.
+*Compute* (live, `ZEROG_COMPUTE=1`): the verdict that releases the deposit runs on 0G
+Compute via `@0gfoundation/0g-compute-ts-sdk` — model `qwen/qwen2.5-omni-7b`, billed
+through an on-chain ledger, provider acknowledged on-chain. The response signature is
+fetched and verified with `broker.inference.processResponse`, and the outcome is written
+into the evidence log and sealed to HCS with the rest of the receipt, so which brain
+ruled — and whether its signature verified — is checkable on-chain rather than asserted
+here.
 
-`npm run probe:compute` validates the whole path (ledger, provider handshake, image
-request, signature verification) before it is switched on.
+**What we can and cannot claim, precisely.** The service is registered on-chain with
+`verifiability: TeeML`, and its per-response signature verifies. But its attestation
+endpoint returns **501 — "attestation report is not available for centralized
+providers"**, and the signature payload is tagged `centralized:aliyun`. So the honest
+claim is *verified inference on 0G Compute*, not *TEE-sealed inference*. The two other
+multimodal TeeML providers on the network (`google/gemma-3-27b-it`,
+`openai/gpt-oss-20b`) were unreachable during the hackathon. The code verifies whatever
+the provider offers, so the day a real attesting provider is live this becomes TEE-sealed
+with no change.
+
+Fail-soft: on any provider error, timeout, rate limit, or unparseable answer the call
+returns null and the conventional vision brain decides — and the receipt records which
+one did, because a fallback verdict is not a 0G verdict.
+
+`npm run probe:compute` validates the path end to end (ledger, handshake, image request,
+signature verification) before it is switched on.
 
 **World ID** — one human, one live checkout. The nullifier is the sybil key: no
 documents, no wallet-per-person assumption. Device-level verification, so any World

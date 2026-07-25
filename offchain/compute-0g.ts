@@ -43,13 +43,24 @@ async function getBroker(): Promise<any> {
   return brokerPromise;
 }
 
-const SYSTEM =
-  "You are Aivy Checkout's evidence verifier. You are adversarial by default: the uploader is " +
-  "financially motivated to hide damage and to reuse old photos. Only report conditionOk=true if " +
-  "the described item is clearly present and undamaged. Only report nonceOk=true if the physical " +
-  "liveness instruction is unambiguously satisfied in THIS image. If the image looks AI-generated, " +
-  "edited, or re-photographed from a screen, fail the corresponding check. When uncertain, fail. " +
-  'Answer with strict JSON only: {"conditionOk":bool,"nonceOk":bool,"reason":"one sentence"}';
+/**
+ * Tuned for a 7B multimodal model, which behaves differently from a frontier
+ * one. Two changes earn their keep, both found by testing against real evidence:
+ *
+ *  - "seen" first. Forcing the model to state what is in frame before judging
+ *    grounds the verdict; without it, it judged from the instruction text and
+ *    missed a palm occupying half the photo.
+ *  - Presence, not position. "when uncertain, fail" plus literal wording made it
+ *    reject a hand resting ON the laptop because the instruction said "beside
+ *    the trackpad". Frontier models read that as intent; a 7B reads it as spec.
+ *
+ * Verified against controls: a palm-on-laptop photo passes, a chair photo with
+ * no pen fails. Loosening presence-vs-position did not make it a rubber stamp.
+ */
+const SYSTEM = `You verify photo evidence that releases a security deposit. Return strict JSON only:
+{"seen":"what is actually in the foreground, one sentence","conditionOk":bool,"nonceOk":bool,"reason":"one sentence"}
+conditionOk: true if the described item is present and free of structural damage. Ignore normal wear.
+nonceOk: true if the required object or gesture from the liveness instruction is clearly present and deliberate. Judge presence, not exact position: "beside the trackpad" is satisfied by a hand resting anywhere on the laptop. false if it is absent, or if the photo looks generated or re-photographed from a screen.`;
 
 function parseVerdict(raw: string): { conditionOk: boolean; nonceOk: boolean; reason: string } | null {
   // models wrap JSON in prose or fences often enough that a bare parse is naive
@@ -114,6 +125,10 @@ export async function judgeOn0gCompute(
       return null;
     }
 
+    // The signature is filed under the provider's own response key, NOT the
+    // chat id in the body. Passing body.id gets "chat_id_not_found" and the
+    // whole verification silently degrades — cost an hour to find.
+    const resKey = res.headers.get("zg-res-key") ?? undefined;
     const body: any = await res.json();
     const answer = String(body.choices?.[0]?.message?.content ?? "");
     const parsed = parseVerdict(answer);
@@ -127,9 +142,9 @@ export async function judgeOn0gCompute(
     // record it rather than discarding the inference.
     let teeVerified: boolean | null = null;
     try {
-      teeVerified = await broker.inference.processResponse(provider, body.id, answer);
+      teeVerified = await broker.inference.processResponse(provider, resKey, answer);
     } catch (e: any) {
-      console.warn("[0g-compute] TEE verification errored:", e?.message ?? e);
+      console.warn("[0g-compute] signature verification errored:", e?.message ?? e);
     }
 
     console.log(
