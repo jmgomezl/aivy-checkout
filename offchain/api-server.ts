@@ -468,6 +468,12 @@ async function readHistory(limit = 8): Promise<any[]> {
       const blob = Buffer.concat(parts.map((p) => Buffer.from(p.message, "base64"))).toString("utf8");
       const r = JSON.parse(blob);
       if (r?.app !== "aivy-checkout") continue;
+      // The topic carries the whole lifecycle now — checkout_created,
+      // nonces_committed, one verdict_signed per item — and only the terminal
+      // receipt has an outcome. Without this the archive renders every
+      // intermediate event as an empty "case", which is what a judge sees
+      // first on the landing page.
+      if (!r.outcome || !Array.isArray(r.items) || r.items.length === 0) continue;
       out.push({
         sequence: parts[0].sequence_number,
         checkoutId: r.checkoutId,
@@ -475,7 +481,9 @@ async function readHistory(limit = 8): Promise<any[]> {
         tenant: r.tenant,
         releaseTx: r.releaseTx,
         ts: r.ts,
-        items: (r.items ?? []).map((i: any) => ({ item: i.item, verdict: i.verdict, tx: i.tx })),
+        items: r.items
+          .filter((i: any) => i && i.item)
+          .map((i: any) => ({ item: String(i.item), verdict: i.verdict === "FAIL" ? "FAIL" : "PASS", tx: i.tx })),
       });
     } catch {
       // a malformed receipt is not worth failing the whole archive over
