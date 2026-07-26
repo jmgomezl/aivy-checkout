@@ -1048,6 +1048,11 @@ export default function App() {
             action={health.worldAction ?? "aivy-checkout"}
             rp_context={rpContext}
             allow_legacy_proofs={true}
+            // When we live inside Telegram, World App bounces the user
+            // straight back into the Mini App after the proof — no manual
+            // app-switching. Outside Telegram (plain browser) we omit it so
+            // World's default return behavior applies.
+            {...(tg?.initData ? { return_to: "https://t.me/aivycheckout_bot" } : {})}
             preset={worldPreset}
             handleVerify={handleWorldVerify}
             onSuccess={() => {
