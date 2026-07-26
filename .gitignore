@@ -1,3 +1,6 @@
+# internal build prompts / working notes — not part of the product
+FABLE_PROMPT.md
+
 # secrets — never commit keys
 .env
 .env.*

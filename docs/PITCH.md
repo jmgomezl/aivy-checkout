@@ -116,7 +116,7 @@ on anvil (`npm run api` + preview) — rehearse once offline too.
 5. **"The relayer is trusted."** Yes — baseline. It's one `setVerifier` call
    away from a 0G TEE enclave key (tested in the suite). Trust seam named,
    exit built.
-6. **"Is anything mocked?"** World ID live (v2, portal-verified). Hedera
+6. **"Is anything mocked?"** World ID live (4.0, portal-verified). Hedera
    live (escrow 0x3516…E269, HCS 0.0.9736741). 0G live (public roots).
    Vision: real GPT. The only sim left is Selfie Check — flag-armed for the
    beta this weekend.
