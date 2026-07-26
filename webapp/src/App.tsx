@@ -130,7 +130,7 @@ type Archived = {
   ts: string;
   items: ArchivedItem[];
 };
-type TemplateCard = { id: string; title: string; payer: string; blurb: string; icon: string; itemCount: number; depositHbar: number };
+type TemplateCard = { id: string; title: string; payer: string; blurb: string; icon: string; itemCount: number; depositHbar: number; geoLock: boolean; timeLockMinutes: number; brain: string };
 type DraftItem = { name: string; desc: string; nonce: string };
 const PIPELINE = ["UPLOADING EVIDENCE", "HASHING → 0G STORAGE", "AI VISION ANALYZING", "SIGNING VERDICT", "SETTLING ON-CHAIN"];
 
@@ -552,7 +552,13 @@ export default function App() {
     try {
       const addr = payout.trim();
       if (addr) localStorage.setItem("aivy:payout", addr);
-      const payload: any = { nullifier, tenantAddress: addr || undefined, geoLock, timeLockMinutes: timeLock || 30, brain: health?.computeEnabled ? brain : "openai" };
+      const payload: any = { nullifier, tenantAddress: addr || undefined };
+      if (building) {
+        // the builder IS the designer — their choices define the inspection
+        payload.geoLock = geoLock;
+        payload.timeLockMinutes = timeLock || 30;
+        payload.brain = health?.computeEnabled ? brain : "openai";
+      }
       if (wantFresh.current) {
         payload.fresh = true;
         wantFresh.current = false;
@@ -858,33 +864,15 @@ export default function App() {
                 </p>
               </div>
             )}
-            <div className="locks">
-              <label className="lock">
-                <input type="checkbox" checked={geoLock} onChange={(e) => setGeoLock(e.target.checked)} />
-                <span className="lock-box" />
-                <span className="lock-text"><b>📍 GEO-LOCK</b><i>GPS sealed into every capture — proves WHERE</i></span>
-              </label>
-              <label className="lock">
-                <input type="checkbox" checked={timeLock > 0} onChange={(e) => setTimeLock(e.target.checked ? 15 : 0)} />
-                <span className="lock-box" />
-                <span className="lock-text"><b>⏱ TIME LOCK</b><i>evidence window enforced on-chain — proves WHEN</i></span>
-              </label>
-              {timeLock > 0 && (
-                <div className="lock-mins">
-                  {[15, 30, 60].map((m) => (
-                    <button key={m} className={timeLock === m ? "on" : ""} onClick={() => setTimeLock(m)}>{m} MIN</button>
-                  ))}
-                </div>
-              )}
-              {health?.computeEnabled && (
-                <div className="brainsel">
-                  <span className="lock-text"><b>🧠 VERIFIER</b><i>who judges your evidence</i></span>
-                  <div className="lock-mins brain-mins">
-                    <button className={brain === "0g-compute" ? "on" : ""} onClick={() => setBrain("0g-compute")}>0G TEE · VERIFIABLE</button>
-                    <button className={brain === "openai" ? "on" : ""} onClick={() => setBrain("openai")}>GPT · FRONTIER</button>
-                  </div>
-                </div>
-              )}
+            {/* Terms are DESIGNED into the inspection by the host/template —
+                the tenant reads them, they don't negotiate them. */}
+            <div className="terms">
+              <span className="fine">INSPECTION TERMS — SET BY THE HOST</span>
+              <div className="terms-row">
+                <span className={`term ${picked.geoLock ? "on" : ""}`}>📍 {picked.geoLock ? "GEO-LOCKED — GPS sealed per capture" : "no geo requirement"}</span>
+                <span className="term on">⏱ {picked.timeLockMinutes}-MIN WINDOW — enforced on-chain</span>
+                <span className="term on">🧠 {picked.brain === "0g-compute" ? "0G TEE VERIFIER — verifiable inference" : "GPT VERIFIER"}</span>
+              </div>
             </div>
             {settling ? (
               <SettlementTicker items={building ? draft.length : picked?.itemCount ?? 3} />

@@ -660,3 +660,9 @@ body {
 /* demo sign-out (footer, subtle) */
 .signout { display: block; margin: 14px auto 0; background: none; border: 1px dashed var(--line-hot); border-radius: 4px; color: var(--dim); font: 600 9px var(--display); letter-spacing: .18em; padding: 8px 16px; cursor: pointer; transition: color .2s, border-color .2s; }
 .signout:hover { color: var(--red); border-color: var(--red); }
+
+/* read-only inspection terms (set by the designer, shown to the tenant) */
+.terms { margin-top: 14px; display: flex; flex-direction: column; gap: 7px; }
+.terms-row { display: flex; flex-direction: column; gap: 5px; }
+.term { font-size: 11px; color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 8px 11px; }
+.term.on { color: var(--fg); border-color: var(--line-hot); }

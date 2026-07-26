@@ -55,7 +55,7 @@ const RELAYER_PK = resolveRelayerKey(process.env);
 const WORLD_MODE = resolveWorldMode(process.env);
 
 type TemplateItem = { name: string; desc: string; nonce: string };
-type Template = { id: string; title: string; payer: string; blurb: string; icon: string; depositHbar?: number; items: TemplateItem[] };
+type Template = { id: string; title: string; payer: string; blurb: string; icon: string; depositHbar?: number; geoLock?: boolean; timeLockMinutes?: number; brain?: "0g-compute" | "openai"; items: TemplateItem[] };
 
 // The platform: one escrow + evidence + AI-verdict engine, many inspection
 // templates. Anything physical that two parties dispute at a handover.
@@ -64,6 +64,7 @@ const TEMPLATES: Template[] = [
     id: "rental_checkout",
     title: "Rental Checkout",
     payer: "hosts & property managers",
+    geoLock: false, timeLockMinutes: 30, // stage-friendly: no GPS prompt on the flagship
     blurb: "Tenant proves the place is fine; deposit releases itself.",
     icon: "🏠",
     items: [
@@ -101,7 +102,8 @@ const TEMPLATES: Template[] = [
     id: "vehicle_return",
     title: "Vehicle Return",
     payer: "rental fleets & insurers",
-    depositHbar: 10, // premium escrow — requires a higher assurance tier
+    depositHbar: 10,
+    geoLock: true, timeLockMinutes: 15, // insurer-grade: WHERE + tight WHEN // premium escrow — requires a higher assurance tier
     blurb: "Bumper-to-bumper condition receipt before the keys change hands.",
     icon: "🚗",
     items: [
@@ -126,6 +128,7 @@ const TEMPLATES: Template[] = [
     id: "delivery_handover",
     title: "Delivery Handover",
     payer: "merchants & 3PLs",
+    geoLock: true, timeLockMinutes: 15, // the address IS the claim
     blurb: "Courier proves the parcel arrived intact, at the right door.",
     icon: "📦",
     items: [
@@ -137,6 +140,7 @@ const TEMPLATES: Template[] = [
     id: "shelf_audit",
     title: "Retail Shelf Audit",
     payer: "CPG brands & distributors",
+    geoLock: true, timeLockMinutes: 30, // prove the store, not the stockroom photo
     blurb: "Merchandiser proves the product is on-shelf, priced, and faced.",
     icon: "🛒",
     items: [
@@ -296,6 +300,14 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   // one human, one live checkout — the World ID nullifier is the sybil key
   const tpl = customItems ? null : (templateById(templateId ?? "rental_checkout") ?? TEMPLATES[0]);
   const items = customItems ? sanitizeCustomItems(customItems) : tpl!.items;
+  // Terms belong to the inspection DESIGNER: templates carry their own
+  // geo/time/verifier; client-supplied values are honored only for custom
+  // inspections (where the client IS the designer).
+  if (tpl) {
+    geoLock = tpl.geoLock ?? false;
+    timeLockMinutes = tpl.timeLockMinutes ?? 30;
+    brain = tpl.brain ?? (process.env.ZEROG_COMPUTE === "1" ? "0g-compute" : undefined);
+  }
   const names = new Set(items.map((i) => i.name));
   if (names.size !== items.length) throw new Error("duplicate item names");
 
@@ -801,7 +813,7 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { topic: process.env.HCS_TOPIC_ID ?? null, receipts: await readHistory() });
     }
     if (path === "/api/templates" && req.method === "GET") {
-      return json(res, 200, { templates: TEMPLATES.map(({ id, title, payer, blurb, icon, items, depositHbar }) => ({ id, title, payer, blurb, icon, itemCount: items.length, depositHbar: depositHbar ?? 2 })) });
+      return json(res, 200, { templates: TEMPLATES.map(({ id, title, payer, blurb, icon, items, depositHbar, geoLock, timeLockMinutes, brain }) => ({ id, title, payer, blurb, icon, itemCount: items.length, depositHbar: depositHbar ?? 2, geoLock: geoLock ?? false, timeLockMinutes: timeLockMinutes ?? 30, brain: brain ?? (process.env.ZEROG_COMPUTE === "1" ? "0g-compute" : "openai") })) });
     }
     if (path === "/api/demo/checkout" && req.method === "POST") {
       const body = await readBody(req);
