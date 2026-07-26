@@ -596,6 +596,8 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
     nonceOk: verdict.nonceOk,
     reason: verdict.reason,
     brain: verdict.brain,
+    teeVerified: verdict.teeVerified ?? null,
+    computeModel: verdict.computeModel ?? null,
     imageHash: stored.imageHash,
     evidenceUri: stored.uri,
     storageRoot: stored.root ?? null,
