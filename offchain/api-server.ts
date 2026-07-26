@@ -72,7 +72,7 @@ const TEMPLATES: Template[] = [
     // lamp OFF rejected with the right reason, TEE-verified. So the flagship
     // earns the 0G brain. GPT stays as the automatic fallback chain.
     brain: "0g-compute",
-    blurb: "Tenant proves the place is fine; deposit releases itself.",
+    blurb: "Show the place is fine. Your deposit comes straight back.",
     icon: "🏠",
     items: [
       // Two items, not three: this gets demoed live and repeatedly, so every
@@ -101,7 +101,7 @@ const TEMPLATES: Template[] = [
     payer: "camera, drone & gear rentals",
     depositHbar: 10,
     geoLock: false, timeLockMinutes: 30,
-    blurb: "High-value gear, higher-assurance human. Selfie tier unlocks this escrow.",
+    blurb: "Cameras, drones, anything pricey. One extra selfie unlocks it.",
     icon: "💎",
     items: [
       { name: "gear_item", desc: "laptop open, screen intact and casing not cracked", nonce: "place the green glowing joystick lamp next to the laptop" },
@@ -117,7 +117,7 @@ const TEMPLATES: Template[] = [
     id: "expense_receipt",
     title: "Expense Receipt",
     payer: "finance teams & expense platforms",
-    blurb: "Claimant proves the receipt is real and in hand; the reimbursement releases itself.",
+    blurb: "Show the receipt is real. The reimbursement pays itself.",
     icon: "🧾",
     items: [
       { name: "receipt_total", desc: "printed receipt with a legible total and date, photographed as paper and not as a screen", nonce: "hold the receipt flat with your thumb at the bottom edge" },
@@ -130,7 +130,7 @@ const TEMPLATES: Template[] = [
     payer: "rental fleets & insurers",
     depositHbar: 10,
     geoLock: true, timeLockMinutes: 15, // insurer-grade: WHERE + tight WHEN // premium escrow — requires a higher assurance tier
-    blurb: "Bumper-to-bumper condition receipt before the keys change hands.",
+    blurb: "Walk around the car once. Done before the keys change hands.",
     icon: "🚗",
     items: [
       { name: "front_bumper", desc: "front bumper and hood, no dents or scratches", nonce: "hold your open palm on the hood while shooting the bumper" },

@@ -688,7 +688,7 @@ export default function App() {
           <section className="reveal d1">
             <div className="chips">
               <span className="verified-chip">✓ Verified human</span>
-              <span className={`tier-chip t-${tier}`}>{tier === "orb" ? "⚪ ORB" : tier === "selfie" ? "🤳 SELFIE" : "🟢 DEVICE"} · CAP {capHbar} ℏ</span>
+              <span className={`tier-chip t-${tier}`}>{tier === "orb" ? "Level 3" : tier === "selfie" ? "Level 2" : "Level 1"} · up to {capHbar} ℏ</span>
               {tier !== "device" && (
                 <button
                   className="tier-chip demo-clamp"
@@ -698,20 +698,10 @@ export default function App() {
                     if (out?.tier) { setTier(out.tier); setCapHbar(out.capHbar ?? 2); }
                   }}
                 >
-                  👁 View as device tier
+                  👁 View as Level 1
                 </button>
               )}
             </div>
-            {templates.some((t) => t.depositHbar > capHbar) && (
-              <div className="unlock-strip reveal">
-                <span className="unlock-copy">🔒 Bigger deposits need a stronger verification.</span>
-                {selfieEnabled && tier === "device" ? (
-                  <button className="cta" onClick={() => startWorld("selfie")}>🤳 Unlock with Selfie Check</button>
-                ) : (
-                  <button className="cta" onClick={() => startWorld("orb")}>⚪ Unlock with Orb</button>
-                )}
-              </div>
-            )}
             <h2 className="hub-title">What are you handing over?</h2>
             
             <div className="hub-grid">
@@ -725,13 +715,13 @@ export default function App() {
                     // a locked card IS the unlock button — no dead-end taps
                     onClick={() => (locked ? startWorld(need === "selfie" && selfieEnabled ? "selfie" : "orb") : setPicked(t))}
                   >
-                    {t.id === "rental_checkout" && <span className="flag">FLAGSHIP DEMO</span>}
+                    
                     {locked && <span className="lockmark">🔒 {need === "selfie" ? "Selfie" : "Orb"} tier</span>}
                     <span className="usecase-icon">{t.icon}</span>
                     <span className="usecase-title">{t.title}</span>
                     <span className="usecase-blurb">{t.blurb}</span>
                     <span className="usecase-meta">
-                      {t.itemCount} checks · {t.depositHbar} ℏ escrow · pays: {t.payer}
+                      {t.itemCount} photos · {t.depositHbar} ℏ deposit
                     </span>
                     {locked && <span className="usecase-unlock">Tap to unlock {need === "selfie" ? "with Selfie Check 🤳" : "with Orb ⚪"}</span>}
                   </button>
@@ -743,21 +733,21 @@ export default function App() {
                   <p className="stepup-copy">This deposit needs {stepUp === "selfie" ? "a quick selfie verification" : "Orb verification"}.</p>
                   <div className="stepup-actions">
                     {selfieEnabled ? (
-                      <button className="cta" onClick={() => startWorld("selfie")}>🤳 SELFIE CHECK</button>
+                      <button className="cta" onClick={() => startWorld("selfie")}>🤳 Selfie Check</button>
                     ) : (
-                      <button className="cta ghost" disabled>🤳 SELFIE CHECK — BETA OPENS THIS WEEKEND</button>
+                      <button className="cta ghost" disabled>🤳 Selfie Check — coming soon</button>
                     )}
                     {health?.worldAppId && (
-                      <button className="cta" onClick={() => startWorld("orb")}>⚪ VERIFY WITH ORB</button>
+                      <button className="cta" onClick={() => startWorld("orb")}>⚪ Verify with Orb</button>
                     )}
                   </div>
                 </div>
               )}
               <button className="usecase custom reveal d3" onClick={() => setBuilding(true)}>
                 <span className="usecase-icon">＋</span>
-                <span className="usecase-title">BUILD YOUR OWN</span>
-                <span className="usecase-blurb">Define the checklist. The engine does the rest.</span>
-                <span className="usecase-meta">ANY INDUSTRY · ANY HANDOVER</span>
+                <span className="usecase-title">Build your own</span>
+                <span className="usecase-blurb">Any handover. You set the checklist.</span>
+                <span className="usecase-meta">Fully custom</span>
               </button>
             </div>
           </section>
@@ -970,9 +960,9 @@ export default function App() {
           <>
             <section className={`casebar reveal ${released ? "done" : ""}`}>
               <div className="casebar-left">
-                <span className="case-no">{checkout.templateIcon} {checkout.template} · Case Nº {checkout.checkoutId}</span>
+                <span className="case-no">{checkout.templateIcon} {checkout.template}</span>
                 <span className="case-amt">
-                  {checkout.depositHbar.toFixed(0)} ℏ IN ESCROW
+                  {checkout.depositHbar.toFixed(0)} ℏ protected
                   {checkout.geoLock && <b className="lockchip">📍 GEO</b>}
                   {checkout.deadline && !released && <Countdown to={checkout.deadline} />}
                 </span>
@@ -983,20 +973,21 @@ export default function App() {
                     <span key={it.name} className={`seg ${it.passed ? "on" : ""}`} />
                   ))}
                 </div>
-                <span className={`case-status ${released ? "ok" : ""}`}>{released ? "RELEASED" : `${passedCount}/${total} SEALED`}</span>
+                <span className={`case-status ${released ? "ok" : ""}`}>{released ? "Paid out ✓" : `${passedCount} of ${total} done`}</span>
               </div>
             </section>
 
             <button className="case-exit" onClick={resetDemo}>
-              {released ? "▸  RUN ANOTHER CHECKOUT" : "←  BACK TO USE CASES"}
+              {released ? "Start another checkout" : "←  All use cases"}
             </button>
 
             {released && (
               <section className="panel released reveal">
-                <h2 className="panel-title glow">DEPOSIT<br />RELEASED.</h2>
-                <p className="panel-copy">Funds hit the payout wallet the moment the last signed verdict cleared the contract.</p>
-                <button className="cta" onClick={() => setShowReceipt(true)}>🧾 PRINT THE RECEIPT</button>
-                <button className="case-exit" onClick={resetDemo}>▸&nbsp;&nbsp;Run another checkout</button>
+                <div className="payday">🎉</div>
+                <h2 className="panel-title">{checkout.depositHbar.toFixed(0)} ℏ is on its way<br />back to you.</h2>
+                <p className="panel-copy">Every check passed. The deposit paid out automatically.</p>
+                <button className="cta" onClick={() => setShowReceipt(true)}>🧾 View your receipt</button>
+                <button className="case-exit" onClick={resetDemo}>Start another checkout</button>
               </section>
             )}
 
@@ -1023,7 +1014,7 @@ export default function App() {
                     {!item.passed && (
                       <>
                         <div className="challenge">
-                          <span className="challenge-label">LIVENESS CHALLENGE</span>
+                          <span className="challenge-label">Do this in your photo</span>
                           <span className="challenge-text">{item.nonceInstruction}</span>
                         </div>
                         <label className={`capture ${busyItem === item.name ? "busy" : ""}`}>
