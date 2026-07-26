@@ -447,10 +447,9 @@ export default function App() {
   useEffect(() => {
     tg?.ready?.();
     tg?.expand?.();
-    // the Evidence Lab is dark by design — without this, Telegram frames it in
-    // the viewer's own theme and a light-mode judge gets a white header band
-    tg?.setHeaderColor?.("#07090d");
-    tg?.setBackgroundColor?.("#07090d");
+    // warm light product — keep Telegram's frame matched to the canvas
+    tg?.setHeaderColor?.("#faf8f3");
+    tg?.setBackgroundColor?.("#faf8f3");
     api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null; worldRpId?: string | null; computeEnabled?: boolean; x402Enabled?: boolean }>("/api/health").then(setHealth).catch(() => {});
     api<{ templates: TemplateCard[] }>("/api/templates").then((t) => setTemplates(t.templates)).catch(() => {});
     loadArchive();
@@ -654,8 +653,8 @@ export default function App() {
         <header className="mast reveal">
           <div className="mast-row">
             <span className="mast-dot" />
-            <span className="mast-proto">Proof-of-checkout protocol</span>
-            <span className="mast-net">{health?.network === "hedera-testnet" ? "HEDERA·TESTNET" : health?.network === "hedera-mainnet" ? "HEDERA" : "LOCAL·CHAIN"}</span>
+            <span className="mast-proto">Deposit protection</span>
+            <span className="mast-net">{health?.network === "hedera-mainnet" ? "live" : "beta"}</span>
           </div>
           <h1 className="mast-brand">
             AIVY<span className="brand-slash">/</span>CHECKOUT
@@ -677,8 +676,8 @@ export default function App() {
               <button className="cta" onClick={() => startWorld("gate")}>Verify with World ID</button>
             ) : (
               <>
-                <button className="cta" onClick={verify}>Verify personhood</button>
-                <p className="fine">Simulator mode — set WORLD_APP_ID server-side to go live</p>
+                <button className="cta" onClick={verify}>Verify it's you</button>
+                <p className="fine">Demo mode</p>
               </>
             )}
           </section>
