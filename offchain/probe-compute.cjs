@@ -16,7 +16,7 @@ const IMAGE = process.argv[3] || null;
 
 (async () => {
   const { createZGComputeNetworkBroker } = await import("@0gfoundation/0g-compute-ts-sdk");
-  const rpc = env.ZEROG_RPC_URL || "https://evmrpc-testnet.0g.ai";
+  const rpc = env.ZEROG_COMPUTE_RPC_URL || env.ZEROG_RPC_URL || "https://evmrpc-testnet.0g.ai";
   const wallet = new ethers.Wallet(env.ZEROG_PRIVATE_KEY, new ethers.JsonRpcProvider(rpc));
   console.log("wallet:", wallet.address);
 

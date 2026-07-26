@@ -19,9 +19,14 @@
  */
 import type { VisionInput, VisionVerdict } from "./vision-agent.js";
 
-// qwen2.5-omni-7b — the multimodal service on the network; the other listed
-// provider is image-editing and cannot judge. Override if the network changes.
-const DEFAULT_PROVIDER = "0xa48f01287233509FD694a22Bf840225062E67836";
+// Compute network is independently switchable from storage: storage stays on
+// Galileo testnet while inference buys from MAINNET, where the catalog holds
+// qwen3-vl-30b (TeeML) — a real VLM able to judge STATE, not just presence.
+// ZEROG_COMPUTE_RPC_URL + ZEROG_COMPUTE_PROVIDER select the network/provider;
+// defaults remain the testnet 7B for backwards compatibility.
+const DEFAULT_PROVIDER = "0xa48f01287233509FD694a22Bf840225062E67836"; // testnet qwen2.5-omni-7b
+export const MAINNET_RPC = "https://evmrpc.0g.ai";
+export const MAINNET_VLM_PROVIDER = "0x4415ef5CBb415347bb18493af7cE01f225Fc0868"; // qwen3-vl-30b TeeML
 const BUDGET_MS = Number(process.env.ZEROG_COMPUTE_TIMEOUT_MS ?? 25_000);
 
 let brokerPromise: Promise<any> | null = null;
@@ -32,7 +37,7 @@ async function getBroker(): Promise<any> {
     brokerPromise = (async () => {
       const { ethers } = await import("ethers");
       const zg: any = await import("@0gfoundation/0g-compute-ts-sdk" as string);
-      const rpc = process.env.ZEROG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
+      const rpc = process.env.ZEROG_COMPUTE_RPC_URL ?? process.env.ZEROG_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
       const wallet = new ethers.Wallet(process.env.ZEROG_PRIVATE_KEY!, new ethers.JsonRpcProvider(rpc));
       return zg.createZGComputeNetworkBroker(wallet);
     })().catch((e) => {
