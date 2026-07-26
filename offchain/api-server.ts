@@ -66,11 +66,11 @@ const TEMPLATES: Template[] = [
     payer: "hosts & property managers",
     geoLock: false, timeLockMinutes: 30, // stage-friendly: no GPS prompt on the flagship
     // The flagship's lamp challenge is STATE-critical ("glowing"). Tested on
-    // the real evidence: qwen-7B on 0G missed the unlit lamp entirely (its
-    // "seen" didn't even mention it); GPT caught it. Frontier perception for
-    // state challenges is a designer-grade choice — presence-based templates
-    // below stay on the TEE-verified 0G brain.
-    brain: "openai",
+    // the real evidence: testnet qwen-7B missed the unlit lamp entirely; the
+    // MAINNET qwen3-vl-30b (TeeML) passed both controls — lamp ON approved,
+    // lamp OFF rejected with the right reason, TEE-verified. So the flagship
+    // earns the 0G brain. GPT stays as the automatic fallback chain.
+    brain: "0g-compute",
     blurb: "Tenant proves the place is fine; deposit releases itself.",
     icon: "🏠",
     items: [

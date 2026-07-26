@@ -26,8 +26,8 @@ const IMAGE = process.argv[3] || null;
   let ledger = null;
   try { ledger = await broker.ledger.getLedger(); } catch (e) { console.log("no ledger yet:", e.message?.slice(0, 90)); }
   if (!ledger) {
-    console.log("creating ledger with 0.01 OG (leaving the rest for 0G Storage gas)…");
-    await broker.ledger.addLedger(0.01);
+    console.log("creating ledger (leaving the rest for 0G Storage gas)…");
+    await broker.ledger.addLedger(Number(env.ZEROG_LEDGER_TOPUP || "3"));
     ledger = await broker.ledger.getLedger();
   }
   console.log("ledger balance:", ethers.formatEther(ledger.totalBalance ?? ledger[1] ?? 0n), "OG");
