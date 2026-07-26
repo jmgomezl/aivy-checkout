@@ -89,6 +89,25 @@ const TEMPLATES: Template[] = [
     ],
   },
   {
+    // The tier-ladder demo template. 10 HBAR deliberately exceeds the DEVICE
+    // cap (2), so a device-tier human hits TIER_GATE:selfie the moment they
+    // tap it — that's the point. Unlike Vehicle Return (geo-locked, needs an
+    // actual car), every item here is shootable at a venue table with the
+    // two props we carry. No geo, generous window: the assurance ladder is
+    // the star of this one, not the inspection terms.
+    id: "premium_handover",
+    title: "Premium Handover",
+    payer: "camera, drone & gear rentals",
+    depositHbar: 10,
+    geoLock: false, timeLockMinutes: 30,
+    blurb: "High-value gear, higher-assurance human. Selfie tier unlocks this escrow.",
+    icon: "💎",
+    items: [
+      { name: "gear_item", desc: "laptop open, screen intact and casing not cracked", nonce: "place the green glowing joystick lamp next to the laptop" },
+      { name: "case_check", desc: "chair with an intact seat and backrest, no cracks or broken legs", nonce: "place the yellow plush toy with green hair on the seat of the chair" },
+    ],
+  },
+  {
     // Not an object's condition but a document's authenticity — the same
     // machinery, pointed at expense fraud: screenshots of screens, the same
     // receipt claimed twice, totals edited after the fact. A challenge
