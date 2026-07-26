@@ -53,6 +53,29 @@ client-supplied hint is deliberately ignored for access control.
 **Remaining risk:** confirming the exact identifier strings the live v4
 verify response uses for each credential (parsed defensively until then).
 
+## Live at the venue: Selfie Check END-TO-END confirmed (with one naming trap)
+
+Ran the real flow on a phone inside the Telegram Mini App (2026-07-26,
+~03:00): device-tier sign-in → 10 ℏ escrow rejected by our tier gate →
+Selfie Check step-up → World App face capture → proof verified at
+`POST /api/v4/verify/{rp_id}`. **It works.** Two findings for the beta team:
+
+5. **The Selfie Check credential identifier is `face`, not `selfie`.** The
+   idkit preset is named `selfieCheckLegacy` and all product copy says
+   "Selfie Check", but the verified proof comes back with
+   `credential=face`. Our tier mapper matched only `selfie`, so a PASSED
+   Selfie Check silently landed at device tier and the gate stayed shut —
+   cost a live debugging session at 3 AM. A documented list of the exact
+   identifier strings each preset yields would have prevented it entirely
+   (this is the "remaining risk" above, realized).
+6. **Orb-verified testers can't see step-up flows naturally.** An
+   Orb-verified human's first proof already carries the top credential, so
+   any assurance-laddered app has to build a "clamp me down" demo affordance
+   (we did) to exercise Selfie Check at all. A dev-portal toggle to present
+   a chosen credential level at max would make beta-testing Selfie Check far
+   easier for exactly the population most likely to test it: Orb-verified
+   developers.
+
 ## Venue TODO (fill during weekend)
 
 - [ ] Confirm live v4 verify response shape + credential identifier strings
