@@ -581,6 +581,36 @@ body {
 }
 .usecase:hover { border-color: var(--lime); transform: translateY(-2px); box-shadow: 0 10px 30px -14px var(--lime); }
 .usecase.custom { border-style: dashed; }
+
+/* Locked cards read as "visible but not yet yours": content dimmed, a
+   diagonal tier watermark across the middle, and an explicit unlock hint —
+   the whole card is the unlock button, so there is no dead-end tap. */
+.usecase.locked { border-style: dashed; border-color: var(--line-hot); }
+.usecase.locked:hover { border-color: #7fb7ff; box-shadow: 0 10px 30px -14px #7fb7ff; }
+.usecase.locked .usecase-icon,
+.usecase.locked .usecase-title,
+.usecase.locked .usecase-blurb,
+.usecase.locked .usecase-meta { opacity: .38; }
+.lockmark {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-weight: 800; font-size: 13px; letter-spacing: .22em;
+  color: #7fb7ff; opacity: .55; transform: rotate(-14deg); pointer-events: none;
+}
+.usecase-unlock {
+  font-size: 8.5px; letter-spacing: .14em; color: #7fb7ff;
+  border-top: 1px dashed var(--line-hot); padding-top: 7px; margin-top: 2px;
+}
+
+.unlock-strip {
+  display: flex; flex-direction: column; gap: 8px;
+  border: 1px dashed #7fb7ff55; border-radius: 4px;
+  background: #7fb7ff0d; padding: 12px 14px; margin-bottom: 12px;
+}
+.unlock-copy { font-size: 11px; color: var(--dim); letter-spacing: .04em; }
+.unlock-strip .cta { margin: 0; }
+
+.tier-chip.demo-clamp { cursor: pointer; background: none; border-style: dashed; color: var(--dim); }
+.tier-chip.demo-clamp:hover { color: var(--fg); border-color: var(--fg); }
 .flag {
   position: absolute; top: -1px; right: -1px;
   font-size: 8px; letter-spacing: .14em;

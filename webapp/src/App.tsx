@@ -460,7 +460,6 @@ export default function App() {
 
   // ── World ID 4.0 plumbing ─────────────────────────────────────────
   const [worldOpen, setWorldOpen] = useState(false);
-  const [demoLadder, setDemoLadder] = useState(false);
   const [worldKind, setWorldKind] = useState<"gate" | "orb" | "selfie">("gate");
   const [rpContext, setRpContext] = useState<RpContext | null>(null);
   const worldResult = useRef<any>(null);
@@ -523,17 +522,14 @@ export default function App() {
   // idkit response to /api/v4/verify/{rp_id} and returns our session (tier,
   // nullifier, cap). onSuccess then applies it via applyWorldSession.
   const handleWorldVerify = useCallback(async (result: unknown) => {
-    // demoLadder rides only on the gate sign-in: it clamps an Orb-verified
-    // tester to DEVICE tier server-side so the step-up ladder is walkable.
     const out = await api<any>("/api/world/verify-v4", {
       idkitResponse: result,
-      demoLadder: demoLadder && worldKind === "gate",
       // lets the server cap a demo-clamped session's selfie step at SELFIE
       // tier even when World presents the stronger orb credential
       stepKind: worldKind,
     });
     worldResult.current = out;
-  }, [worldKind, demoLadder]);
+  }, [worldKind]);
 
   /**
    * Practice runs need a way out that isn't "close the Mini App". Clearing the
@@ -676,16 +672,7 @@ export default function App() {
               Just proof there's a unique human behind this deposit.
             </p>
             {health?.worldAppId ? (
-              <>
-                <button className="cta" onClick={() => { setDemoLadder(false); startWorld("gate"); }}>VERIFY WITH WORLD ID</button>
-                <button
-                  className="cta ghost"
-                  onClick={() => { setDemoLadder(true); startWorld("gate"); }}
-                  title="Orb-verified? Your first proof already maxes the ladder — this clamps you to DEVICE tier so the step-up flow can be demoed."
-                >
-                  🪜 DEMO THE ASSURANCE LADDER — START AT DEVICE
-                </button>
-              </>
+              <button className="cta" onClick={() => startWorld("gate")}>VERIFY WITH WORLD ID</button>
             ) : (
               <>
                 <button className="cta" onClick={verify}>VERIFY PERSONHOOD</button>
@@ -701,22 +688,59 @@ export default function App() {
             <div className="chips">
               <span className="verified-chip">✓ HUMAN VERIFIED · {nullifier.slice(0, 14)}…</span>
               <span className={`tier-chip t-${tier}`}>{tier === "orb" ? "⚪ ORB" : tier === "selfie" ? "🤳 SELFIE" : "🟢 DEVICE"} · CAP {capHbar} ℏ</span>
+              {tier !== "device" && (
+                <button
+                  className="tier-chip demo-clamp"
+                  title="Demo control: see the app the way a device-only World user does — locked cards, unlock ladder."
+                  onClick={async () => {
+                    const out = await api<any>("/api/demo-tier", { nullifier, tier: "device" });
+                    if (out?.tier) { setTier(out.tier); setCapHbar(out.capHbar ?? 2); }
+                  }}
+                >
+                  👁 VIEW AS DEVICE TIER
+                </button>
+              )}
             </div>
+            {templates.some((t) => t.depositHbar > capHbar) && (
+              <div className="unlock-strip reveal">
+                <span className="unlock-copy">
+                  🔒 Escrows above {capHbar} ℏ need a higher World ID assurance tier.
+                </span>
+                {selfieEnabled && tier === "device" ? (
+                  <button className="cta" onClick={() => startWorld("selfie")}>🤳 UNLOCK WITH SELFIE CHECK</button>
+                ) : (
+                  <button className="cta" onClick={() => startWorld("orb")}>⚪ UNLOCK WITH ORB</button>
+                )}
+              </div>
+            )}
             <h2 className="hub-title">PROOF FOR ANYTHING<br />YOU CAN PHOTOGRAPH.</h2>
             <p className="panel-copy hub-copy">
               One engine — escrow, liveness challenges, AI verdicts, sealed receipts. Pick an
               inspection, or design your own.
             </p>
             <div className="hub-grid">
-              {templates.map((t, i) => (
-                <button key={t.id} className={`usecase reveal d${(i % 3) + 1}`} onClick={() => setPicked(t)}>
-                  {t.id === "rental_checkout" && <span className="flag">FLAGSHIP DEMO</span>}
-                  <span className="usecase-icon">{t.icon}</span>
-                  <span className="usecase-title">{t.title.toUpperCase()}</span>
-                  <span className="usecase-blurb">{t.blurb}</span>
-                  <span className="usecase-meta">{t.itemCount} CHECKS · {t.depositHbar} ℏ ESCROW{t.depositHbar > capHbar ? " · 🔒 STEP-UP" : ""} · PAYS: {t.payer.toUpperCase()}</span>
-                </button>
-              ))}
+              {templates.map((t, i) => {
+                const locked = t.depositHbar > capHbar;
+                const need = t.depositHbar <= 10 ? "selfie" : "orb";
+                return (
+                  <button
+                    key={t.id}
+                    className={`usecase reveal d${(i % 3) + 1}${locked ? " locked" : ""}`}
+                    // a locked card IS the unlock button — no dead-end taps
+                    onClick={() => (locked ? startWorld(need === "selfie" && selfieEnabled ? "selfie" : "orb") : setPicked(t))}
+                  >
+                    {t.id === "rental_checkout" && <span className="flag">FLAGSHIP DEMO</span>}
+                    {locked && <span className="lockmark">🔒 {need === "selfie" ? "SELFIE" : "ORB"} TIER</span>}
+                    <span className="usecase-icon">{t.icon}</span>
+                    <span className="usecase-title">{t.title.toUpperCase()}</span>
+                    <span className="usecase-blurb">{t.blurb}</span>
+                    <span className="usecase-meta">
+                      {t.itemCount} CHECKS · {t.depositHbar} ℏ ESCROW · PAYS: {t.payer.toUpperCase()}
+                    </span>
+                    {locked && <span className="usecase-unlock">TAP TO UNLOCK {need === "selfie" ? "WITH SELFIE CHECK 🤳" : "WITH ORB ⚪"}</span>}
+                  </button>
+                );
+              })}
               {stepUp && (
                 <div className="stepup reveal">
                   <b className="stepup-title">🔒 HIGHER ASSURANCE REQUIRED</b>

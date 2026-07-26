@@ -824,19 +824,14 @@ const server = createServer(async (req, res) => {
       // meets the step-up gate. demoLadder clamps THIS sign-in to device so
       // the ladder can be walked from the bottom; every later step-up is
       // still a real World proof. Clamping down is never a privilege gain.
-      if (body.demoLadder === true) {
-        nullifierTier.set(nullifier, "device");
-        demoClamped.add(nullifier);
-      } else {
-        // In a demo-clamped session, World App presents its strongest
-        // credential (an Orb-verified tester gets orb even on the selfie
-        // step-up, with no re-capture — credentials are reusable). Cap the
-        // selfie step at selfie tier so the ladder's middle rung is visible.
-        // Capping down is never a privilege gain.
-        const capped: typeof level =
-          demoClamped.has(nullifier) && body.stepKind === "selfie" && level === "orb" ? "selfie" : level;
-        recordTier(nullifier, capped);
-      }
+      // In a demo-clamped session, World App presents its strongest
+      // credential (an Orb-verified tester gets orb even on the selfie
+      // step-up, with no re-capture — credentials are reusable). Cap the
+      // selfie step at selfie tier so the ladder's middle rung is visible.
+      // Capping down is never a privilege gain.
+      const capped: typeof level =
+        demoClamped.has(nullifier) && body.stepKind === "selfie" && level === "orb" ? "selfie" : level;
+      recordTier(nullifier, capped);
       const tier = tierOf(nullifier);
       console.log(`[api] ✅ v4 verified nullifier=${nullifier.slice(0, 14)}… credential=${credential} tier=${tier}${body.demoLadder ? " (demo-clamped)" : ""}`);
       return json(res, 200, {
@@ -845,6 +840,22 @@ const server = createServer(async (req, res) => {
         linkedWallet: nullifierWallet.get(nullifier) ?? null,
         selfieEnabled: SELFIE_ENABLED,
       });
+    }
+    if (path === "/api/demo-tier" && req.method === "POST") {
+      // Demo control: view the app as a lower tier. Strictly a DOWNGRADE for
+      // an already-verified session — never a way to gain assurance — so it
+      // is safe to expose. Lets Orb-verified humans (who out-rank every gate)
+      // experience the locked cards + unlock ladder a device user sees.
+      const body = await readBody(req);
+      const nullifier = String(body.nullifier ?? "");
+      const wanted = String(body.tier ?? "device") as Tier;
+      if (!verifiedNullifiers.has(nullifier)) return json(res, 401, { error: "verify first" });
+      if (!(wanted in TIER_RANK)) return json(res, 400, { error: "unknown tier" });
+      if (TIER_RANK[wanted] > TIER_RANK[tierOf(nullifier)]) return json(res, 403, { error: "demo-tier can only go down" });
+      nullifierTier.set(nullifier, wanted);
+      demoClamped.add(nullifier);
+      console.log(`[api] 👁 demo-tier: ${nullifier.slice(0, 14)}… viewing as ${wanted}`);
+      return json(res, 200, { ok: true, tier: wanted, capHbar: TIER_CAP_HBAR[wanted], selfieEnabled: SELFIE_ENABLED });
     }
     if (path === "/api/verify-human" && req.method === "POST") {
       const out = await verifyHuman(await readBody(req));
