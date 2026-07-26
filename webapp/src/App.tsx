@@ -133,7 +133,7 @@ type Archived = {
 };
 type TemplateCard = { id: string; title: string; payer: string; blurb: string; icon: string; itemCount: number; depositHbar: number; geoLock: boolean; timeLockMinutes: number; brain: string };
 type DraftItem = { name: string; desc: string; nonce: string };
-const PIPELINE = ["UPLOADING EVIDENCE", "HASHING → 0G STORAGE", "AI VISION ANALYZING", "SIGNING VERDICT", "SETTLING ON-CHAIN"];
+const PIPELINE = ["Uploading evidence", "Hashing → 0G Storage", "AI is judging the photo", "Signing the verdict", "Settling on-chain"];
 
 /** Rotating pipeline status while an item is being verified. */
 function PipelineTicker() {
@@ -160,17 +160,17 @@ function PipelineTicker() {
  */
 const SETTLE_STEPS = [
   {
-    label: "OPENING THE CASE FILE",
+    label: "Opening the case file",
     call: "createCheckout()",
     note: "required items + a 30-minute deadline, written on-chain",
   },
   {
-    label: "LOCKING THE DEPOSIT",
+    label: "Locking the deposit",
     call: "deposit()",
     note: "2 ℏ held by the contract — not by the host, not by us",
   },
   {
-    label: "SEALING THE LIVENESS CHALLENGES",
+    label: "Sealing the liveness challenges",
     call: "commitNonce()",
     note: "hashed now, revealed only at capture — that's the anti-replay",
   },
@@ -194,7 +194,7 @@ function SettlementTicker({ items }: { items: number }) {
   return (
     <div className="settle">
       <div className="settle-head">
-        <span className="settle-title">SETTLING ON HEDERA</span>
+        <span className="settle-title">Settling on Hedera</span>
         <span className="settle-clock">{elapsed.toFixed(1)}s</span>
       </div>
       <ol className="settle-steps">
@@ -654,13 +654,13 @@ export default function App() {
         <header className="mast reveal">
           <div className="mast-row">
             <span className="mast-dot" />
-            <span className="mast-proto">PROOF-OF-CHECKOUT PROTOCOL</span>
+            <span className="mast-proto">Proof-of-checkout protocol</span>
             <span className="mast-net">{health?.network === "hedera-testnet" ? "HEDERA·TESTNET" : health?.network === "hedera-mainnet" ? "HEDERA" : "LOCAL·CHAIN"}</span>
           </div>
           <h1 className="mast-brand">
             AIVY<span className="brand-slash">/</span>CHECKOUT
           </h1>
-          <div className="mast-tag">verifiable inspection receipts for the physical world — AI judges the evidence, the chain moves the money</div>
+          <div className="mast-tag">Verifiable inspection receipts for the physical world — AI judges the evidence, the chain moves the money</div>
         </header>
 
         {/* ─── GATE: personhood ─────────────────────────────────────── */}
@@ -669,17 +669,17 @@ export default function App() {
             <div className="gate-ring">
               <div className="gate-ring-inner">☝</div>
             </div>
-            <h2 className="panel-title">ONE HUMAN,<br />ONE CHECKOUT.</h2>
+            <h2 className="panel-title">One human,<br />one checkout.</h2>
             <p className="panel-copy">
               Your World ID nullifier is the sybil-resistance key. No documents. No doxxing.
               Just proof there's a unique human behind this deposit.
             </p>
             {health?.worldAppId ? (
-              <button className="cta" onClick={() => startWorld("gate")}>VERIFY WITH WORLD ID</button>
+              <button className="cta" onClick={() => startWorld("gate")}>Verify with World ID</button>
             ) : (
               <>
-                <button className="cta" onClick={verify}>VERIFY PERSONHOOD</button>
-                <p className="fine">SIMULATOR MODE — set WORLD_APP_ID server-side to go live</p>
+                <button className="cta" onClick={verify}>Verify personhood</button>
+                <p className="fine">Simulator mode — set WORLD_APP_ID server-side to go live</p>
               </>
             )}
           </section>
@@ -689,7 +689,7 @@ export default function App() {
         {verified && !checkout && !picked && !building && (
           <section className="reveal d1">
             <div className="chips">
-              <span className="verified-chip">✓ HUMAN VERIFIED · {nullifier.slice(0, 14)}…</span>
+              <span className="verified-chip">✓ Verified human</span>
               <span className={`tier-chip t-${tier}`}>{tier === "orb" ? "⚪ ORB" : tier === "selfie" ? "🤳 SELFIE" : "🟢 DEVICE"} · CAP {capHbar} ℏ</span>
               {tier !== "device" && (
                 <button
@@ -700,7 +700,7 @@ export default function App() {
                     if (out?.tier) { setTier(out.tier); setCapHbar(out.capHbar ?? 2); }
                   }}
                 >
-                  👁 VIEW AS DEVICE TIER
+                  👁 View as device tier
                 </button>
               )}
             </div>
@@ -710,13 +710,13 @@ export default function App() {
                   🔒 Escrows above {capHbar} ℏ need a higher World ID assurance tier.
                 </span>
                 {selfieEnabled && tier === "device" ? (
-                  <button className="cta" onClick={() => startWorld("selfie")}>🤳 UNLOCK WITH SELFIE CHECK</button>
+                  <button className="cta" onClick={() => startWorld("selfie")}>🤳 Unlock with Selfie Check</button>
                 ) : (
-                  <button className="cta" onClick={() => startWorld("orb")}>⚪ UNLOCK WITH ORB</button>
+                  <button className="cta" onClick={() => startWorld("orb")}>⚪ Unlock with Orb</button>
                 )}
               </div>
             )}
-            <h2 className="hub-title">PROOF FOR ANYTHING<br />YOU CAN PHOTOGRAPH.</h2>
+            <h2 className="hub-title">Proof for anything<br />you can photograph.</h2>
             <p className="panel-copy hub-copy">
               One engine — escrow, liveness challenges, AI verdicts, sealed receipts. Pick an
               inspection, or design your own.
@@ -733,20 +733,20 @@ export default function App() {
                     onClick={() => (locked ? startWorld(need === "selfie" && selfieEnabled ? "selfie" : "orb") : setPicked(t))}
                   >
                     {t.id === "rental_checkout" && <span className="flag">FLAGSHIP DEMO</span>}
-                    {locked && <span className="lockmark">🔒 {need === "selfie" ? "SELFIE" : "ORB"} TIER</span>}
+                    {locked && <span className="lockmark">🔒 {need === "selfie" ? "Selfie" : "Orb"} tier</span>}
                     <span className="usecase-icon">{t.icon}</span>
-                    <span className="usecase-title">{t.title.toUpperCase()}</span>
+                    <span className="usecase-title">{t.title}</span>
                     <span className="usecase-blurb">{t.blurb}</span>
                     <span className="usecase-meta">
-                      {t.itemCount} CHECKS · {t.depositHbar} ℏ ESCROW · PAYS: {t.payer.toUpperCase()}
+                      {t.itemCount} checks · {t.depositHbar} ℏ escrow · pays: {t.payer}
                     </span>
-                    {locked && <span className="usecase-unlock">TAP TO UNLOCK {need === "selfie" ? "WITH SELFIE CHECK 🤳" : "WITH ORB ⚪"}</span>}
+                    {locked && <span className="usecase-unlock">Tap to unlock {need === "selfie" ? "with Selfie Check 🤳" : "with Orb ⚪"}</span>}
                   </button>
                 );
               })}
               {stepUp && (
                 <div className="stepup reveal">
-                  <b className="stepup-title">🔒 HIGHER ASSURANCE REQUIRED</b>
+                  <b className="stepup-title">🔒 Higher assurance required</b>
                   <p className="stepup-copy">
                     This escrow size needs the {stepUp === "selfie" ? "SELFIE" : "ORB"} tier. Your World ID
                     assurance level literally sets your economic limits here.
@@ -781,7 +781,7 @@ export default function App() {
             <div className="section-break"><span>ARCHIVE</span></div>
             <section className="archive-zone reveal d3">
               <div className="archive-head">
-                <h2 className="archive-title">EVERY CASE STAYS PROVABLE.</h2>
+                <h2 className="archive-title">Every case stays provable</h2>
                 <span className="archive-tag">READ-ONLY</span>
               </div>
               <p className="archive-copy">
@@ -826,7 +826,7 @@ export default function App() {
             {health?.x402Enabled && (
               <section className="archive-zone reveal d3">
                 <div className="archive-head">
-                  <h2 className="archive-title">🤖 AGENT PAY-PER-USE INSPECTION</h2>
+                  <h2 className="archive-title">🤖 Agents pay per inspection</h2>
                   <span className="archive-tag">x402 · HBAR</span>
                 </div>
                 <p className="archive-copy">
@@ -932,7 +932,7 @@ export default function App() {
         {verified && !checkout && picked && !building && (
           <section className="panel reveal d1">
             <button className="backlink" onClick={() => setPicked(null)}>← ALL USE CASES</button>
-            <div className="verified-chip">{picked.icon} {picked.title.toUpperCase()} · {picked.itemCount} CHECKS</div>
+            <div className="verified-chip">{picked.icon} {picked.title} · {picked.itemCount} checks</div>
             <h2 className="panel-title">YOUR DEPOSIT IS<br />IN ESCROW.</h2>
             <p className="panel-copy">
               Locked in a Hedera smart contract. Pass every check and the
@@ -964,7 +964,7 @@ export default function App() {
             {/* Terms are DESIGNED into the inspection by the host/template —
                 the tenant reads them, they don't negotiate them. */}
             <div className="terms">
-              <span className="fine">INSPECTION TERMS — SET BY THE HOST</span>
+              <span className="fine">Inspection terms · set by the host</span>
               <div className="terms-row">
                 <span className={`term ${picked.geoLock ? "on" : ""}`}>📍 {picked.geoLock ? "GEO-LOCKED — GPS sealed per capture" : "no geo requirement"}</span>
                 <span className="term on">⏱ {picked.timeLockMinutes}-MIN WINDOW — enforced on-chain</span>
@@ -974,7 +974,7 @@ export default function App() {
             {settling ? (
               <SettlementTicker items={building ? draft.length : picked?.itemCount ?? 3} />
             ) : (
-                          <button className="cta" onClick={start}>BEGIN CHECKOUT</button>
+                          <button className="cta" onClick={start}>Begin checkout</button>
             )}
           </section>
         )}
@@ -984,7 +984,7 @@ export default function App() {
           <>
             <section className={`casebar reveal ${released ? "done" : ""}`}>
               <div className="casebar-left">
-                <span className="case-no">{checkout.templateIcon} {checkout.template.toUpperCase()} · CASE Nº {checkout.checkoutId}</span>
+                <span className="case-no">{checkout.templateIcon} {checkout.template} · Case Nº {checkout.checkoutId}</span>
                 <span className="case-amt">
                   {checkout.depositHbar.toFixed(0)} ℏ IN ESCROW
                   {checkout.geoLock && <b className="lockchip">📍 GEO</b>}
@@ -1010,7 +1010,7 @@ export default function App() {
                 <h2 className="panel-title glow">DEPOSIT<br />RELEASED.</h2>
                 <p className="panel-copy">Funds hit the payout wallet the moment the last signed verdict cleared the contract.</p>
                 <button className="cta" onClick={() => setShowReceipt(true)}>🧾 PRINT THE RECEIPT</button>
-                <button className="case-exit" onClick={resetDemo}>▸&nbsp;&nbsp;RUN ANOTHER CHECKOUT</button>
+                <button className="case-exit" onClick={resetDemo}>▸&nbsp;&nbsp;Run another checkout</button>
               </section>
             )}
 
@@ -1027,7 +1027,7 @@ export default function App() {
                     <div className="ev-head">
                       <span className="ev-icon">{ITEM_ICON[item.name] ?? "▣"}</span>
                       <div className="ev-titles">
-                        <b>{item.name.replace(/_/g, " ").toUpperCase()}</b>
+                        <b style={{ textTransform: "capitalize" }}>{item.name.replace(/_/g, " ")}</b>
                         <span className="ev-desc">{item.description}</span>
                       </div>
                       {state === "pass" && <span className="verdict-stamp pass">PASS</span>}
@@ -1041,7 +1041,7 @@ export default function App() {
                           <span className="challenge-text">{item.nonceInstruction}</span>
                         </div>
                         <label className={`capture ${busyItem === item.name ? "busy" : ""}`}>
-                          {busyItem === item.name ? <PipelineTicker /> : <span>◉&nbsp;&nbsp;CAPTURE EVIDENCE</span>}
+                          {busyItem === item.name ? <PipelineTicker /> : <span>◉&nbsp;&nbsp;Capture evidence</span>}
                           <input
                             type="file"
                             // naming the formats (rather than image/*) makes iOS
@@ -1111,11 +1111,11 @@ export default function App() {
         {error && <div className="errorbar reveal">⚠ {error}</div>}
 
         <footer className="colophon">
-          ECRECOVER-VERIFIED VERDICTS · EVIDENCE HASHED ON-CHAIN · RECEIPTS SEALED TO HCS
-          <br />HEDERA × 0G × WORLD ID — ETHGLOBAL LISBOA
+          Signed verdicts, hashed evidence, receipts sealed to Hedera Consensus
+          <br />Hedera × 0G × World ID — ETHGlobal Lisboa
           {verified && (
             <button className="signout" onClick={signOut} title="Forget this identity and show the World ID flow again">
-              ⏻ SIGN OUT · NEW IDENTITY
+              ⏻ Sign out · new identity
             </button>
           )}
         </footer>
