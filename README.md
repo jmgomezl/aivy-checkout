@@ -84,8 +84,8 @@ someone's hand, so it is filmed in the demo video rather than automated here.</s
 1. Open **https://checkout.aivylabs.xyz** → verify with World ID (real, v4)
 2. Pick **Rental Checkout** → your 2 ℏ deposit escrows on Hedera testnet in front of you
 3. Follow a liveness challenge (*"place the yellow plush toy on the chair"*) → shoot → watch: `hash → 0G Storage → AI verdict → signed → ecrecover on-chain`
-4. Pass every item → **the deposit pays out in the same transaction** → a paper receipt prints with clickable HashScan links, the 0G storage root, and the verified-inference line
-5. Try to cheat (wrong object, reused photo) → signed **FAIL** verdict lands on-chain → **funds stay locked**
+4. Pass every item → **the deposit pays out in the same transaction** → a paper receipt prints with clickable HashScan links, the 0G storage root, the verified-inference line, and the **`agent fee` line — the AI was just paid 0.1 ℏ for each verdict it rendered**
+5. Try to cheat (wrong object, reused photo) → signed **FAIL** verdict lands on-chain → **funds stay locked** — and the agent still gets its fee: it is paid to judge, not to approve
 
 | Live | |
 |---|---|
@@ -93,6 +93,7 @@ someone's hand, so it is filmed in the demo video rather than automated here.</s
 | Telegram Mini App | **https://t.me/aivycheckout_bot** |
 | Escrow (Hedera testnet) | [`0x83B5…8226`](https://hashscan.io/testnet/contract/0x83B55906c6359c3f43Bf95cb8Cdef4455DB68226) |
 | Receipt log (HCS) | [topic `0.0.9736741`](https://hashscan.io/testnet/topic/0.0.9736741) |
+| Verifier agent's wallet (its public payroll) | [`0x732D…0f5E`](https://hashscan.io/testnet/account/0x732Daf3D26A3a1F7f9978d006A5F099b0Fa00f5E) |
 | World ID | `app_952df7edf32b602c03c445e6732ea04a` · action `aivy-checkout` · World ID 4.0 live |
 
 Everything above is live infrastructure — no mocks in the money path.
