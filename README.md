@@ -231,6 +231,15 @@ multimodal provider is live, this becomes TEE-sealed with **zero code changes**.
 fallback verdict (provider slow/down → GPT) is never laundered as a 0G verdict — the
 receipt names the brain that actually decided.
 
+**A finding worth more than a feature (beta feedback):** verifier choice is
+challenge-dependent. On the real evidence photo, the 7B multimodal on 0G
+*did not perceive* an unlit lamp at the frame edge (its "seen" field never
+mentioned it) and passed a state-critical challenge that GPT correctly
+failed ("the lamp is not glowing"). So templates whose challenges hinge on
+STATE (glowing, powered on) are designed onto the frontier verifier, while
+presence-based challenges keep TEE-verified 0G inference — the trade-off is
+per-inspection, not global.
+
 **Engineering scars kept for the next team:** the maintained SDK is
 `@0gfoundation/0g-storage-ts-sdk` — the older `@0glabs` package targets a retired flow
 contract and reverts on Galileo (16602); the response signature lives under the
