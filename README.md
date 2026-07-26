@@ -49,24 +49,9 @@ most lacks *verified humans producing verifiable evidence*. The reports are in
   </tr>
 </table>
 
-```mermaid
----
-config:
-  themeVariables:
-    xyChart:
-      plotColorPalette: "#4d7ea8, #c6f52e"
----
-xychart-beta
-    title "Where the internet hurts — opportunity score = pain x volume x reach"
-    x-axis ["ticketing vs bots", "DeFi vs bots", "creators vs bots", "deepfakes", "fake reviews", "unverifiable claims"]
-    y-axis "opportunity score" 0 --> 120
-    bar [107.6, 101.1, 91.6, 90.8, 0, 0]
-    bar [0, 0, 0, 0, 79.5, 47.2]
-```
+![Where the internet hurts — opportunity scores from the pain-mining run; the lime bars (fake reviews, unverifiable claims) are where we built](docs/media/pain-chart.svg)
 
-Every bar is the same disease — **nobody can prove a human was behind the evidence**.
-The 🟢 **lime bars are the ones we picked**: where forged evidence collides with
-physical-world money — and where nobody else was building. What the data kept saying:
+What the data kept saying:
 
 - **[“My insurance rates went up 23% — AI fraud is wilder than I thought”](https://www.reddit.com/r/Insurance/comments/1uamntf/my_insurance_rates_went_up_again_went_down_a/)** (r/Insurance) — generative AI has made photo evidence forgeable at zero cost, and everyone's premiums are paying for it
 - **[“Farmers denied my claim — neighbor's illegal contractor damaged my house”](https://www.reddit.com/r/Insurance/comments/1h99r16/farmers_denied_claim_neighbors_illegal_contractor/)** (r/Insurance) — real physical-world damage, no verifiable trail of who did what, claim dead

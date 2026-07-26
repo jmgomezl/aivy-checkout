@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 470" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+  <!-- panel -->
+  <rect x="0" y="0" width="920" height="470" rx="8" fill="#0f131a"/>
+  <rect x="0.5" y="0.5" width="919" height="469" rx="8" fill="none" stroke="#242c3a"/>
+
+  <!-- title -->
+  <text x="34" y="44" fill="#e8edf4" font-size="21" font-weight="bold">WHERE THE INTERNET HURTS</text>
+  <text x="34" y="68" fill="#7d8aa0" font-size="13">opportunity score = pain intensity × volume × audience reach · ~80 scored complaints · HN / Reddit / Lemmy</text>
+
+  <!-- gridlines + y labels -->
+  <g stroke="#1d2430" stroke-width="1">
+    <line x1="70" y1="120" x2="886" y2="120"/>
+    <line x1="70" y1="190" x2="886" y2="190"/>
+    <line x1="70" y1="260" x2="886" y2="260"/>
+    <line x1="70" y1="330" x2="886" y2="330"/>
+  </g>
+  <g font-size="11" text-anchor="end">
+    <text x="60" y="124" fill="#5a6478">120</text>
+    <text x="60" y="194" fill="#5a6478">80</text>
+    <text x="60" y="264" fill="#5a6478">40</text>
+    <text x="60" y="334" fill="#5a6478">0</text>
+  </g>
+
+  <!-- axis -->
+  <line x1="70" y1="330" x2="886" y2="330" stroke="#3a4558" stroke-width="1.5"/>
+
+  <!-- bars: baseline y=330, scale 1.75 px per point -->
+  <!-- ticketing vs bots 107.6 -> h=188 -->
+  <rect x="88"  y="142" width="92" height="188" rx="3" fill="#46587a"/>
+  <text x="134" y="132" fill="#8b99b0" font-size="13" text-anchor="middle">107.6</text>
+  <!-- DeFi vs bots 101.1 -> h=177 -->
+  <rect x="222" y="153" width="92" height="177" rx="3" fill="#46587a"/>
+  <text x="268" y="143" fill="#8b99b0" font-size="13" text-anchor="middle">101.1</text>
+  <!-- creators vs bots 91.6 -> h=160 -->
+  <rect x="356" y="170" width="92" height="160" rx="3" fill="#46587a"/>
+  <text x="402" y="160" fill="#8b99b0" font-size="13" text-anchor="middle">91.6</text>
+  <!-- deepfakes 90.8 -> h=159 -->
+  <rect x="490" y="171" width="92" height="159" rx="3" fill="#46587a"/>
+  <text x="536" y="161" fill="#8b99b0" font-size="13" text-anchor="middle">90.8</text>
+  <!-- fake reviews 79.5 -> h=139 (PICKED) -->
+  <rect x="624" y="191" width="92" height="139" rx="3" fill="#c6f52e"/>
+  <text x="670" y="181" fill="#c6f52e" font-size="14" font-weight="bold" text-anchor="middle">79.5</text>
+  <!-- unverifiable claims 47.2 -> h=83 (PICKED) -->
+  <rect x="758" y="247" width="92" height="83" rx="3" fill="#c6f52e"/>
+  <text x="804" y="237" fill="#c6f52e" font-size="14" font-weight="bold" text-anchor="middle">47.2</text>
+
+  <!-- picked bracket -->
+  <path d="M624 352 L624 360 L850 360 L850 352" fill="none" stroke="#c6f52e" stroke-width="1.5"/>
+  <text x="737" y="378" fill="#c6f52e" font-size="12.5" font-weight="bold" text-anchor="middle">WE BUILT HERE</text>
+
+  <!-- x labels -->
+  <g fill="#93a0b4" font-size="12" text-anchor="middle">
+    <text x="134" y="350">ticketing · bots</text>
+    <text x="268" y="350">DeFi · bots</text>
+    <text x="402" y="350">creators · bots</text>
+    <text x="536" y="350">deepfakes</text>
+    <text x="670" y="350" fill="#c6f52e">fake reviews</text>
+    <text x="804" y="350" fill="#c6f52e">unverifiable claims</text>
+  </g>
+
+  <!-- footer -->
+  <text x="34" y="424" fill="#7d8aa0" font-size="13">Every bar is the same disease — <tspan fill="#e8edf4" font-weight="bold">nobody can prove a human was behind the evidence.</tspan></text>
+  <text x="34" y="446" fill="#7d8aa0" font-size="13">The <tspan fill="#c6f52e" font-weight="bold">lime bars</tspan> are where it collides with physical-world money — and where nobody else was building.</text>
+</svg>
