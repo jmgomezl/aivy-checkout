@@ -666,3 +666,9 @@ body {
 .terms-row { display: flex; flex-direction: column; gap: 5px; }
 .term { font-size: 11px; color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 8px 11px; }
 .term.on { color: var(--fg); border-color: var(--line-hot); }
+
+/* receipt actions */
+.tear-row { display: flex; gap: 10px; margin-top: 16px; }
+.tear-row .tear { margin-top: 0; flex: 1; }
+.tear.share { border-style: solid; border-color: var(--lime); color: var(--lime); }
+.tear.share:hover { background: var(--lime-dim); }

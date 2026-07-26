@@ -300,6 +300,24 @@ function Receipt({
   const finalTx = Object.values(results).map((r) => r.txHash).filter(Boolean).pop() ?? "";
   const seal = Object.values(results).map((r) => r.hcsSeal).filter(Boolean).pop();
 
+  const shareReceipt = useCallback(async () => {
+    const proofUrl = exp && finalTx ? `${exp}/transaction/${finalTx}` : "https://checkout.aivylabs.xyz";
+    const text = `🧾 ${checkout.template} passed — ${checkout.depositHbar.toFixed(0)} ℏ deposit released on-chain the second the last AI verdict landed. Every item verified, receipt sealed to Hedera Consensus. Proof:`;
+    const tgApp = (window as any).Telegram?.WebApp;
+    if (tgApp?.openTelegramLink) {
+      // native Telegram share sheet — pick any contact/chat
+      tgApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(proofUrl)}&text=${encodeURIComponent(text)}`);
+      return;
+    }
+    if (navigator.share) {
+      try { await navigator.share({ title: "Aivy Checkout receipt", text, url: proofUrl }); return; } catch { /* user cancelled */ }
+    }
+    try {
+      await navigator.clipboard.writeText(`${text} ${proofUrl}`);
+      alert("Receipt proof copied to clipboard");
+    } catch { /* nothing sane left */ }
+  }, [checkout, finalTx, exp]);
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="paper-wrap" onClick={(e) => e.stopPropagation()}>
@@ -378,7 +396,10 @@ function Receipt({
 
           <div className="perf perf-bottom" />
         </div>
-        <button className="tear" onClick={onClose}>TEAR OFF ✂ CLOSE</button>
+        <div className="tear-row">
+          <button className="tear share" onClick={shareReceipt}>📤 SHARE PROOF</button>
+          <button className="tear" onClick={onClose}>TEAR OFF ✂ CLOSE</button>
+        </div>
       </div>
     </div>
   );

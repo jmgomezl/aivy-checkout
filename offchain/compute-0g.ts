@@ -60,7 +60,7 @@ async function getBroker(): Promise<any> {
 const SYSTEM = `You verify photo evidence that releases a security deposit. Return strict JSON only:
 {"seen":"what is actually in the foreground, one sentence","conditionOk":bool,"nonceOk":bool,"reason":"one sentence"}
 conditionOk: true if the described item is present and free of structural damage. Ignore normal wear.
-nonceOk: true if the required object or gesture from the liveness instruction is clearly present and deliberate. Judge presence, not exact position: "beside the trackpad" is satisfied by a hand resting anywhere on the laptop. false if it is absent, or if the photo looks generated or re-photographed from a screen.`;
+nonceOk: true if the required object or gesture from the liveness instruction is clearly present and deliberate. Position is flexible: "beside the trackpad" is satisfied by a hand anywhere on the laptop. But any STATE the instruction names is mandatory: "glowing" means visibly emitting light, "green" means visibly green, "powered on" means visibly on — an object that is present but not in the named state is false. false if absent, wrong state, or the photo looks generated or re-photographed from a screen.`;
 
 function parseVerdict(raw: string): { conditionOk: boolean; nonceOk: boolean; reason: string } | null {
   // models wrap JSON in prose or fences often enough that a bare parse is naive
