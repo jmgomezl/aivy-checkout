@@ -106,7 +106,7 @@ flowchart LR
         REL[relayer.ts<br/>verdict signer]
     end
     subgraph ZG["0G — verify, don't trust"]
-        C[0G Compute<br/>qwen2.5-omni · signature-verified inference]
+        C[0G Compute MAINNET<br/>qwen3-vl-30b · TEE signature-verified]
         ST[0G Storage<br/>public evidence roots]
     end
     subgraph HED["Hedera — settlement at machine speed"]
@@ -217,28 +217,33 @@ weakest: an AI deciding whether your photo releases someone's deposit.
 
 | 0G piece | How we use it | Proof |
 |---|---|---|
-| **0G Compute** | The verdict brain: `qwen/qwen2.5-omni-7b` via the broker SDK — on-chain provider acknowledgement, signed request headers, **per-response signature verified** with `processResponse`; the receipt prints `0G COMPUTE · qwen2.5-omni-7b · TEE SIG ✓` | provider [`0xa48f…7836`](https://chainscan-galileo.0g.ai/address/0xa48f01287233509FD694a22Bf840225062E67836), funded ledger on-chain |
+| **0G Compute (MAINNET)** | The verdict brain: `qwen/qwen3-vl-30b-a3b-instruct` (TeeML) via the broker SDK on **0G mainnet** — on-chain provider acknowledgement, signed request headers, **per-response signature verified** with `processResponse`; the receipt prints `0G COMPUTE · qwen3-vl-30b · TEE SIG ✓` | provider [`0x4415…0868`](https://chainscan.0g.ai/address/0x4415ef5CBb415347bb18493af7cE01f225Fc0868), funded ledger on-chain (chain 16661) |
 | **0G Storage** | Every evidence blob — merkle root on the receipt, **publicly downloadable by anyone** via the indexer | `https://indexer-storage-testnet-turbo.0g.ai/file?root=…` links on every receipt |
 | User choice | A **verifier selector** in the app: `0G TEE · VERIFIABLE` vs `GPT · FRONTIER` — the verifiability trade-off as a product surface | checkout setup |
 
 **What we claim and refuse to claim, precisely** (this rigor is the feedback a beta
-wants): the provider is registered `verifiability: TeeML` and its **response
-signatures verify** — but its attestation endpoint returns *501: attestation not
-available for centralized providers* (payload tagged `centralized:aliyun`). So the
-honest claim is **signature-verified inference on 0G Compute**, not full TEE
-attestation. The code verifies whatever the provider offers; the day an attesting
+wants): providers register `verifiability: TeeML` and our client verifies whatever
+they offer. On the **testnet** provider, response signatures verified but the
+attestation endpoint returned *501: attestation not available for centralized
+providers* (payload tagged `centralized:aliyun`). The **mainnet** 30B provider's
+response signatures verify on every call (`processResponse → true`). The honest
+claim is **signature-verified inference on 0G Compute**, not independently audited
+TEE attestation. The code verifies whatever the provider offers; the day an attesting
 multimodal provider is live, this becomes TEE-sealed with **zero code changes**. A
 fallback verdict (provider slow/down → GPT) is never laundered as a 0G verdict — the
 receipt names the brain that actually decided.
 
-**A finding worth more than a feature (beta feedback):** verifier choice is
-challenge-dependent. On the real evidence photo, the 7B multimodal on 0G
-*did not perceive* an unlit lamp at the frame edge (its "seen" field never
-mentioned it) and passed a state-critical challenge that GPT correctly
-failed ("the lamp is not glowing"). So templates whose challenges hinge on
-STATE (glowing, powered on) are designed onto the frontier verifier, while
-presence-based challenges keep TEE-verified 0G inference — the trade-off is
-per-inspection, not global.
+**A finding worth more than a feature (beta feedback):** verifier capability is
+challenge-dependent, and we measured it on real evidence. The testnet 7B
+(`qwen2.5-omni-7b`) *did not perceive* an unlit lamp at the frame edge (its
+"seen" field never mentioned it) and passed a state-critical challenge —
+twice. GPT on the same photo correctly failed it. So we funded a mainnet
+ledger and re-ran the same two control photos against mainnet's
+`qwen3-vl-30b` (TeeML): **lamp ON → approved** ("clearly glowing green as
+instructed"), **lamp OFF → rejected** ("no green light is visible") — both
+responses signature-verified. The 30B earns the flagship; the 7B result
+stands as testnet feedback: state-critical money decisions need mainnet-class
+perception, and 0G's catalog now has it.
 
 **Engineering scars kept for the next team:** the maintained SDK is
 `@0gfoundation/0g-storage-ts-sdk` — the older `@0glabs` package targets a retired flow
@@ -258,14 +263,13 @@ path (12s budget, background completion — the on-chain keccak is identical eit
 | Relayer / authorized verdict signer | [`0x44f7769bFB6E872f491CcF0B655Bee8c06A640a0`](https://hashscan.io/testnet/account/0x44f7769bFB6E872f491CcF0B655Bee8c06A640a0) |
 | HCS receipt topic | [`0.0.9736741`](https://hashscan.io/testnet/topic/0.0.9736741) |
 
-**0G Galileo testnet** (chain 16602) — where evidence is stored and inference is bought.
+**0G** — evidence stored on Galileo testnet (chain 16602); inference bought on **mainnet** (chain 16661), where the catalog holds a VLM strong enough to judge STATE.
 
 | what | address |
 |---|---|
 | Our 0G account (funds the compute ledger and storage) | `0x44f7769bFB6E872f491CcF0B655Bee8c06A640a0` |
-| 0G Compute ledger contract | `0xE70830508dAc0A97e6c087c75f402f9Be669E406` |
-| 0G Compute inference serving contract | `0xa79F4c8311FF93C06b8CfB403690cc987c93F91E` |
-| Inference provider acknowledged on-chain (`qwen/qwen2.5-omni-7b`) | `0xa48f01287233509FD694a22Bf840225062E67836` |
+| **Mainnet** inference provider acknowledged on-chain (`qwen/qwen3-vl-30b-a3b-instruct`, TeeML) | [`0x4415ef5CBb415347bb18493af7cE01f225Fc0868`](https://chainscan.0g.ai/address/0x4415ef5CBb415347bb18493af7cE01f225Fc0868) |
+| Testnet inference provider (`qwen2.5-omni-7b`, kept as the back-compat default) | `0xa48f01287233509FD694a22Bf840225062E67836` |
 
 `CheckoutEscrow` is ours. The 0G ledger and serving contracts are the network's —
 listed because our account holds a funded ledger there and each verdict is billed
