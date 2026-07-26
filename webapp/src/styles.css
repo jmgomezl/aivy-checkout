@@ -702,3 +702,10 @@ body {
 .tear-row .tear { margin-top: 0; flex: 1; }
 .tear.share { border-style: solid; border-color: var(--lime); color: var(--lime); }
 .tear.share:hover { background: var(--lime-dim); }
+
+/* x402 demo panel: raw protocol output, shown as-is — the 402 challenge IS the exhibit */
+.x402-pre {
+  font-size: 10px; line-height: 1.5; color: var(--dim);
+  background: #0b0f16; border: 1px dashed var(--line-hot); border-radius: 4px;
+  padding: 12px; overflow-x: auto; white-space: pre; max-height: 340px; overflow-y: auto;
+}

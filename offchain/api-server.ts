@@ -35,6 +35,7 @@ import {
   parseEther,
 } from "ethers";
 import { itemIdOf, signVerdict, ItemVerdict } from "./payload.js";
+import { x402Enabled, x402PayTo, paymentRequirements, verifyPayment } from "./x402.js";
 import { storeEvidence } from "./storage-0g.js";
 import { judge } from "./vision-agent.js";
 import {
@@ -764,7 +765,68 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === "OPTIONS") return json(res, 204, {});
     if (path === "/api/health") {
-      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, network, hcsTopic: process.env.HCS_TOPIC_ID ?? null, worldId: process.env.WORLD_APP_ID ? "live" : "simulator", worldAppId: process.env.WORLD_APP_ID ?? null, worldAction: process.env.WORLD_ACTION ?? "aivy-checkout", selfieEnabled: SELFIE_ENABLED, worldRpId: process.env.WORLD_RP_ID ?? null, computeEnabled: process.env.ZEROG_COMPUTE === "1" });
+      return json(res, 200, { ok: true, escrow: await escrow.getAddress(), rpc: RPC, network, hcsTopic: process.env.HCS_TOPIC_ID ?? null, worldId: process.env.WORLD_APP_ID ? "live" : "simulator", worldAppId: process.env.WORLD_APP_ID ?? null, worldAction: process.env.WORLD_ACTION ?? "aivy-checkout", selfieEnabled: SELFIE_ENABLED, worldRpId: process.env.WORLD_RP_ID ?? null, computeEnabled: process.env.ZEROG_COMPUTE === "1", x402Enabled: x402Enabled() });
+    }
+    // ── x402: pay-per-use agent inspection (isolated demo path) ──────────
+    // An external agent pays HBAR per request to consume the same verifier
+    // the escrow trusts. Fully gated; touches nothing in the checkout flow.
+    if (path === "/api/x402/inspect" && req.method === "POST") {
+      if (!x402Enabled()) {
+        return json(res, 503, {
+          error: "x402 not configured",
+          hint: "set X402_ENABLED=1 (optional: X402_PAY_TO, X402_PRICE_TINYBAR) and restart",
+        });
+      }
+      const payTo = x402PayTo(relayerWallet.address);
+      const resource = "https://checkout.aivylabs.xyz/api/x402/inspect";
+      const paymentHeader = req.headers["x-payment"];
+      if (!paymentHeader || typeof paymentHeader !== "string") {
+        return json(res, 402, paymentRequirements(payTo, resource));
+      }
+      const paid = await verifyPayment(paymentHeader, payTo);
+      if (!paid.ok) return json(res, paid.status, { error: paid.error, accepts: paymentRequirements(payTo, resource).accepts });
+
+      const body = await readBody(req);
+      const m = /^data:(image\/\w+);base64,(.+)$/.exec(String(body.imageDataUrl ?? ""));
+      if (!m) return json(res, 400, { error: "imageDataUrl must be a base64 image data URL", paid: true, settlement: paid });
+      const ext = m[1] === "image/png" ? ".png" : ".jpg";
+      const imagePath = join(mkdtempSync(join(tmpdir(), "x402-")), `agent-task${ext}`);
+      writeFileSync(imagePath, Buffer.from(m[2], "base64"));
+
+      const verdict = await judge({
+        itemName: String(body.task ?? "agent inspection"),
+        itemDescription: String(body.expectedItem ?? "the described item, present and free of structural damage"),
+        nonceInstruction: String(body.challenge ?? "no liveness challenge supplied"),
+        imagePath,
+      });
+      // sign the verdict so the paying agent gets a verifier-attributable
+      // answer — same key the escrow contract trusts via ecrecover
+      const digest = keccak256(toUtf8Bytes(JSON.stringify({
+        service: "aivy-x402-inspection",
+        verdict: verdict.pass ? "PASS" : "FAIL",
+        reason: verdict.reason,
+        paymentTx: paid.transactionId,
+      })));
+      const signature = await relayerWallet.signMessage(digest);
+      res.setHeader("X-PAYMENT-RESPONSE", Buffer.from(JSON.stringify({
+        success: true, network: "hedera-testnet", transaction: paid.transactionId,
+      })).toString("base64"));
+      return json(res, 200, {
+        ok: true,
+        paid: true,
+        network: "hedera-testnet",
+        settlement: { transactionId: paid.transactionId, amountTinybar: paid.amountTinybar, payTo },
+        verdict: verdict.pass ? "PASS" : "FAIL",
+        conditionOk: verdict.conditionOk,
+        nonceOk: verdict.nonceOk,
+        reason: verdict.reason,
+        brain: verdict.brain,
+        teeVerified: verdict.teeVerified ?? null,
+        signature,
+        verifier: relayerWallet.address,
+        service: "aivy-x402-inspection",
+        note: "paid agent inspection service — settlement verified on the Hedera mirror node",
+      });
     }
     // ── World ID 4.0 (Selfie Check beta) — active when WORLD_RP_ID is set ──
     if (path === "/api/world/rp-signature" && req.method === "POST") {

@@ -200,6 +200,32 @@ condition proves. That is what agentic payments should mean.
 *cryptographically verified AI judgement of physical reality* — with the anti-replay
 challenge living in the contract, not in a prompt — are not.
 
+### x402 extension — the verifier as a paid agent-to-agent service
+
+The escrow is the main act: value moves *autonomously* on verified conditions. The
+x402 endpoint is the same engine faced outward: **an external agent pays HBAR per
+request** to buy one signed inspection verdict from Aivy's verifier.
+
+`POST /api/x402/inspect` speaks the x402 flow — no `X-PAYMENT` header returns an
+**HTTP 402 challenge** with x402-shaped `accepts[]`; the agent then makes a real
+HBAR transfer on Hedera testnet and retries with the transaction id, which we
+verify against the **public mirror node** (recipient, amount ≥ price, ≤10 min old,
+one inspection per tx) before running the verdict and signing the response with
+the same key the escrow contract trusts.
+
+```bash
+# see the 402 challenge (also demoable live from the app's footer panel)
+curl -si -X POST https://checkout.aivylabs.xyz/api/x402/inspect | head -30
+```
+
+Setup: `X402_ENABLED=1` (optional `X402_PAY_TO`, `X402_PRICE_TINYBAR`, default 0.1 ℏ).
+
+**Honest limitations:** x402 has no Hedera facilitator yet, so the scheme
+(`hedera-hbar-transfer`) is custom — protocol-shaped, really settled, but not
+interoperable with EVM x402 clients that expect EIP-3009 tokens; the replay guard
+is in-memory (per boot). Settlement is never assumed: every "paid" in a response
+was verified on the mirror node first.
+
 **Honest gaps:** relayer key = authorized signer (single trusted signer; the contract
 supports hot-swapping to a TEE key — tested); nonces are committed at checkout open
 rather than per-capture-session; API state is in-memory. Engineering scars we kept for

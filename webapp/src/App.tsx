@@ -424,9 +424,10 @@ export default function App() {
   const [releasedAt, setReleasedAt] = useState<Date | null>(null);
   const [payout, setPayout] = useState<string>(() => localStorage.getItem("aivy:payout") ?? "");
   const [error, setError] = useState<string>("");
-  const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null; worldRpId?: string | null; computeEnabled?: boolean } | null>(null);
+  const [health, setHealth] = useState<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null; worldRpId?: string | null; computeEnabled?: boolean; x402Enabled?: boolean } | null>(null);
   const [templates, setTemplates] = useState<TemplateCard[]>([]);
   const [archive, setArchive] = useState<Archived[]>([]);
+  const [x402Demo, setX402Demo] = useState("");
   const [picked, setPicked] = useState<TemplateCard | null>(null);
   const [building, setBuilding] = useState(false);
   const [draft, setDraft] = useState<DraftItem[]>([{ name: "", desc: "", nonce: "" }]);
@@ -448,7 +449,7 @@ export default function App() {
     // the viewer's own theme and a light-mode judge gets a white header band
     tg?.setHeaderColor?.("#07090d");
     tg?.setBackgroundColor?.("#07090d");
-    api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null; worldRpId?: string | null; computeEnabled?: boolean }>("/api/health").then(setHealth).catch(() => {});
+    api<{ worldId: string; worldAppId?: string; worldAction?: string; network?: string; hcsTopic?: string | null; worldRpId?: string | null; computeEnabled?: boolean; x402Enabled?: boolean }>("/api/health").then(setHealth).catch(() => {});
     api<{ templates: TemplateCard[] }>("/api/templates").then((t) => setTemplates(t.templates)).catch(() => {});
     loadArchive();
   }, []);
@@ -816,6 +817,37 @@ export default function App() {
                 </a>
               )}
             </section>
+
+            {/* x402 demo: the same verifier, faced outward as a paid agent
+                service. Read-only zone, after the archive — never competes
+                with the live flow. Shown only when the server enables it. */}
+            {health?.x402Enabled && (
+              <section className="archive-zone reveal d3">
+                <div className="archive-head">
+                  <h2 className="archive-title">🤖 AGENT PAY-PER-USE INSPECTION</h2>
+                  <span className="archive-tag">x402 · HBAR</span>
+                </div>
+                <p className="archive-copy">
+                  The core product is autonomous escrow. This is the same verifier faced
+                  the other way: an external <b>agent pays HBAR per request</b> (x402 flow —
+                  HTTP 402 challenge → X-PAYMENT → mirror-node-verified settlement) to buy
+                  one signed inspection verdict.
+                </p>
+                {x402Demo ? (
+                  <pre className="x402-pre">{x402Demo}</pre>
+                ) : (
+                  <button
+                    className="cta ghost"
+                    onClick={async () => {
+                      const r = await fetch("/api/x402/inspect", { method: "POST" });
+                      setX402Demo(`HTTP ${r.status}\n` + JSON.stringify(await r.json(), null, 2));
+                    }}
+                  >
+                    ⚡ REQUEST WITHOUT PAYING — SEE THE 402 CHALLENGE LIVE
+                  </button>
+                )}
+              </section>
+            )}
           </>
         )}
 
