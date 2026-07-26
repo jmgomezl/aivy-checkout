@@ -162,17 +162,17 @@ const SETTLE_STEPS = [
   {
     label: "Opening the case file",
     call: "createCheckout()",
-    note: "required items + a 30-minute deadline, written on-chain",
+    note: "checklist + deadline, written on-chain",
   },
   {
     label: "Locking the deposit",
     call: "deposit()",
-    note: "2 ℏ held by the contract — not by the host, not by us",
+    note: "held by the contract, not by anyone",
   },
   {
     label: "Sealing the liveness challenges",
     call: "commitNonce()",
-    note: "hashed now, revealed only at capture — that's the anti-replay",
+    note: "your photo challenges, sealed in advance",
   },
 ];
 const SETTLE_STEP_MS = 5400; // measured: ~5s per tx on Hedera testnet
@@ -660,7 +660,7 @@ export default function App() {
           <h1 className="mast-brand">
             AIVY<span className="brand-slash">/</span>CHECKOUT
           </h1>
-          <div className="mast-tag">Verifiable inspection receipts for the physical world — AI judges the evidence, the chain moves the money</div>
+          <div className="mast-tag">Prove it's fine. Get paid instantly.</div>
         </header>
 
         {/* ─── GATE: personhood ─────────────────────────────────────── */}
@@ -671,8 +671,7 @@ export default function App() {
             </div>
             <h2 className="panel-title">One human,<br />one checkout.</h2>
             <p className="panel-copy">
-              Your World ID nullifier is the sybil-resistance key. No documents. No doxxing.
-              Just proof there's a unique human behind this deposit.
+              A quick World ID check — no documents, no account.
             </p>
             {health?.worldAppId ? (
               <button className="cta" onClick={() => startWorld("gate")}>Verify with World ID</button>
@@ -706,9 +705,7 @@ export default function App() {
             </div>
             {templates.some((t) => t.depositHbar > capHbar) && (
               <div className="unlock-strip reveal">
-                <span className="unlock-copy">
-                  🔒 Escrows above {capHbar} ℏ need a higher World ID assurance tier.
-                </span>
+                <span className="unlock-copy">🔒 Bigger deposits need a stronger verification.</span>
                 {selfieEnabled && tier === "device" ? (
                   <button className="cta" onClick={() => startWorld("selfie")}>🤳 Unlock with Selfie Check</button>
                 ) : (
@@ -716,11 +713,8 @@ export default function App() {
                 )}
               </div>
             )}
-            <h2 className="hub-title">Proof for anything<br />you can photograph.</h2>
-            <p className="panel-copy hub-copy">
-              One engine — escrow, liveness challenges, AI verdicts, sealed receipts. Pick an
-              inspection, or design your own.
-            </p>
+            <h2 className="hub-title">What are you handing over?</h2>
+            
             <div className="hub-grid">
               {templates.map((t, i) => {
                 const locked = t.depositHbar > capHbar;
@@ -747,10 +741,7 @@ export default function App() {
               {stepUp && (
                 <div className="stepup reveal">
                   <b className="stepup-title">🔒 Higher assurance required</b>
-                  <p className="stepup-copy">
-                    This escrow size needs the {stepUp === "selfie" ? "SELFIE" : "ORB"} tier. Your World ID
-                    assurance level literally sets your economic limits here.
-                  </p>
+                  <p className="stepup-copy">This deposit needs {stepUp === "selfie" ? "a quick selfie verification" : "Orb verification"}.</p>
                   <div className="stepup-actions">
                     {selfieEnabled ? (
                       <button className="cta" onClick={() => startWorld("selfie")}>🤳 SELFIE CHECK</button>
@@ -781,18 +772,15 @@ export default function App() {
             <div className="section-break"><span>ARCHIVE</span></div>
             <section className="archive-zone reveal d3">
               <div className="archive-head">
-                <h2 className="archive-title">Every case stays provable</h2>
-                <span className="archive-tag">READ-ONLY</span>
+                <h2 className="archive-title">History</h2>
+                <span className="archive-tag">on-chain</span>
               </div>
-              <p className="archive-copy">
-                Not rows in our database — the receipts themselves, read back from Hedera
-                Consensus Service. Anyone with the topic can replay them.
-              </p>
+              <p className="archive-copy">Every receipt, replayed from Hedera Consensus — not from our database.</p>
             <ul className="arch-list">
               {archive.map((h) => (
                 <li key={h.sequence} className="arch-row">
                   <div className="arch-head">
-                    <span className="arch-no">CASE Nº {h.checkoutId}</span>
+                    <span className="arch-no">Case Nº {h.checkoutId}</span>
                     <span className="arch-when">{new Date(h.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                   </div>
                   <div className="arch-items">
@@ -823,7 +811,7 @@ export default function App() {
             {/* x402 demo: the same verifier, faced outward as a paid agent
                 service. Read-only zone, after the archive — never competes
                 with the live flow. Shown only when the server enables it. */}
-            {health?.x402Enabled && (
+            {false && health?.x402Enabled && (
               <section className="archive-zone reveal d3">
                 <div className="archive-head">
                   <h2 className="archive-title">🤖 Agents pay per inspection</h2>
@@ -880,9 +868,9 @@ export default function App() {
             )}
             {payout ? (
               <div className="linked">
-                <span className="fine">PAYS TO</span>
-                <span className="linked-addr">{payout.slice(0, 10)}…{payout.slice(-6)} <b className="ink-lime">✓ LINKED</b></span>
-                <button className="linked-change" onClick={() => setPayout("")}>CHANGE</button>
+                <span className="fine">Pays to</span>
+                <span className="linked-addr">{payout.slice(0, 10)}…{payout.slice(-6)} <b className="ink-lime">✓ linked</b></span>
+                <button className="linked-change" onClick={() => setPayout("")}>Change</button>
               </div>
             ) : (
               <div className="payout">
@@ -933,20 +921,19 @@ export default function App() {
           <section className="panel reveal d1">
             <button className="backlink" onClick={() => setPicked(null)}>← ALL USE CASES</button>
             <div className="verified-chip">{picked.icon} {picked.title} · {picked.itemCount} checks</div>
-            <h2 className="panel-title">YOUR DEPOSIT IS<br />IN ESCROW.</h2>
+            <h2 className="panel-title">Your deposit,<br />held by code.</h2>
             <p className="panel-copy">
-              Locked in a Hedera smart contract. Pass every check and the
-              contract pays out <em>the second</em> the last verdict lands. No counterparty mood. No 30-day wait.
+              Pass every check and it pays out on the spot.
             </p>
             {payout ? (
               <div className="linked">
-                <span className="fine">PAYS TO</span>
-                <span className="linked-addr">{payout.slice(0, 10)}…{payout.slice(-6)} <b className="ink-lime">✓ LINKED</b></span>
-                <button className="linked-change" onClick={() => setPayout("")}>CHANGE</button>
+                <span className="fine">Pays to</span>
+                <span className="linked-addr">{payout.slice(0, 10)}…{payout.slice(-6)} <b className="ink-lime">✓ linked</b></span>
+                <button className="linked-change" onClick={() => setPayout("")}>Change</button>
               </div>
             ) : (
               <div className="payout">
-                <label className="fine" htmlFor="payout">PAYOUT WALLET — LINK ONCE, NEVER ASKED AGAIN (OPTIONAL)</label>
+                <label className="fine" htmlFor="payout">Payout wallet (optional — asked once)</label>
                 <input
                   id="payout"
                   className="addr"
@@ -957,18 +944,18 @@ export default function App() {
                   autoComplete="off"
                 />
                 <p className="fine">
-                  No wallet? <a className="hashlink" href="https://t.me/oculusvaultbot/app" target="_blank" rel="noreferrer">OPEN OCULUSVAULT ↗</a> — the deposit pays straight into it.
+                  No wallet? <a className="hashlink" href="https://t.me/oculusvaultbot/app" target="_blank" rel="noreferrer">Open OculusVault ↗</a>
                 </p>
               </div>
             )}
             {/* Terms are DESIGNED into the inspection by the host/template —
                 the tenant reads them, they don't negotiate them. */}
             <div className="terms">
-              <span className="fine">Inspection terms · set by the host</span>
+              <span className="fine">Terms set by the host</span>
               <div className="terms-row">
-                <span className={`term ${picked.geoLock ? "on" : ""}`}>📍 {picked.geoLock ? "GEO-LOCKED — GPS sealed per capture" : "no geo requirement"}</span>
-                <span className="term on">⏱ {picked.timeLockMinutes}-MIN WINDOW — enforced on-chain</span>
-                <span className="term on">🧠 {picked.brain === "0g-compute" ? "0G TEE VERIFIER — verifiable inference" : "GPT VERIFIER"}</span>
+                <span className={`term ${picked.geoLock ? "on" : ""}`}>📍 {picked.geoLock ? "Location required at capture" : "No location required"}</span>
+                <span className="term on">⏱ {picked.timeLockMinutes} min to finish</span>
+                <span className="term on">🧠 {picked.brain === "0g-compute" ? "Verified AI judge (0G)" : "AI judge (GPT)"}</span>
               </div>
             </div>
             {settling ? (
@@ -1111,8 +1098,7 @@ export default function App() {
         {error && <div className="errorbar reveal">⚠ {error}</div>}
 
         <footer className="colophon">
-          Signed verdicts, hashed evidence, receipts sealed to Hedera Consensus
-          <br />Hedera × 0G × World ID — ETHGlobal Lisboa
+          Aivy Checkout · Hedera × 0G × World ID
           {verified && (
             <button className="signout" onClick={signOut} title="Forget this identity and show the World ID flow again">
               ⏻ Sign out · new identity
