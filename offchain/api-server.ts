@@ -212,6 +212,8 @@ function recordTier(nullifier: string, level: string | undefined) {
 }
 // nullifiers that passed a REAL World ID proof this boot (live mode only)
 const verifiedNullifiers = new Set<string>();
+// sessions that opted into the demo ladder (tier walked from the bottom)
+const demoClamped = new Set<string>();
 const checkoutMeta = new Map<
   number,
   { items: TemplateItem[]; tenant: string; template: string; icon: string; geoLock: boolean; timeLockMinutes: number; brain?: "0g-compute" | "openai"; noncesReady?: Promise<void> }
@@ -824,8 +826,16 @@ const server = createServer(async (req, res) => {
       // still a real World proof. Clamping down is never a privilege gain.
       if (body.demoLadder === true) {
         nullifierTier.set(nullifier, "device");
+        demoClamped.add(nullifier);
       } else {
-        recordTier(nullifier, level);
+        // In a demo-clamped session, World App presents its strongest
+        // credential (an Orb-verified tester gets orb even on the selfie
+        // step-up, with no re-capture — credentials are reusable). Cap the
+        // selfie step at selfie tier so the ladder's middle rung is visible.
+        // Capping down is never a privilege gain.
+        const capped: typeof level =
+          demoClamped.has(nullifier) && body.stepKind === "selfie" && level === "orb" ? "selfie" : level;
+        recordTier(nullifier, capped);
       }
       const tier = tierOf(nullifier);
       console.log(`[api] ✅ v4 verified nullifier=${nullifier.slice(0, 14)}… credential=${credential} tier=${tier}${body.demoLadder ? " (demo-clamped)" : ""}`);

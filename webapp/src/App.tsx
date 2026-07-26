@@ -528,6 +528,9 @@ export default function App() {
     const out = await api<any>("/api/world/verify-v4", {
       idkitResponse: result,
       demoLadder: demoLadder && worldKind === "gate",
+      // lets the server cap a demo-clamped session's selfie step at SELFIE
+      // tier even when World presents the stronger orb credential
+      stepKind: worldKind,
     });
     worldResult.current = out;
   }, [worldKind, demoLadder]);
