@@ -30,6 +30,30 @@ Built solo at **ETHGlobal Lisboa** · Hedera × World × 0G
 
 ---
 
+## 🔍 Why this exists — mined, not brainstormed
+
+This product started as a **data pipeline, not an idea**. Before writing a line of
+product code we built [a pain-mining tool](docs/research/) that harvested and scored
+complaints across Hacker News, Reddit and Lemmy — ~80 scored documents ranked by
+`pain intensity × volume × audience reach` — hunting for the places where the world
+most lacks *verified humans producing verifiable evidence*. The reports are in
+[docs/research/](docs/research/), generated the first night, receipts linked. What
+the data kept saying:
+
+- **[“My insurance rates went up 23% — AI fraud is wilder than I thought”](https://www.reddit.com/r/Insurance/comments/1uamntf/my_insurance_rates_went_up_again_went_down_a/)** (r/Insurance) — generative AI has made photo evidence forgeable at zero cost, and everyone's premiums are paying for it
+- **[“Farmers denied my claim — neighbor's illegal contractor damaged my house”](https://www.reddit.com/r/Insurance/comments/1h99r16/farmers_denied_claim_neighbors_illegal_contractor/)** (r/Insurance) — real physical-world damage, no verifiable trail of who did what, claim dead
+- **[“What's the best site to buy Google reviews?”](https://www.reddit.com/r/smallbusiness/comments/1okn7vb/whats_the_best_site_to_buy_google_reviews/)** (r/smallbusiness, 10k+ reach) — trust signals are simply for sale
+- The HN sweep ranked **bot flooding, deepfakes and verification friction** as the top pain across ticketing, DeFi and creator platforms — 61 documents, one theme
+
+The common failure isn't detection — it's that **evidence is judged after the fact,
+when it's already forgeable**. So we built the inverse: a challenge **committed
+on-chain before the photo exists**, captured by a **provably unique human**, judged
+by **verifiable inference**, settling **money on proof**. Every deposit dispute on
+Earth is two people, two photos, zero proof — that's the wedge; the engine
+generalizes to every checklist in the physical world.
+
+---
+
 ![Aivy Checkout — the personhood gate, the use cases, the escrow terms you choose, and the on-chain archive](docs/media/tour.gif)
 
 <sub>Recorded against the live site. **One human, one checkout** — World ID gates entry.
