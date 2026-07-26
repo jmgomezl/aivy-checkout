@@ -37,8 +37,29 @@ product code we built [a pain-mining tool](docs/research/) that harvested and sc
 complaints across Hacker News, Reddit and Lemmy — ~80 scored documents ranked by
 `pain intensity × volume × audience reach` — hunting for the places where the world
 most lacks *verified humans producing verifiable evidence*. The reports are in
-[docs/research/](docs/research/), generated the first night, receipts linked. What
-the data kept saying:
+[docs/research/](docs/research/), generated the first night, receipts linked.
+
+<table align="center">
+  <tr>
+    <td align="center"><b>~80</b><br/><sub>complaints scored</sub></td>
+    <td align="center"><b>3</b><br/><sub>platforms mined<br/>HN · Reddit · Lemmy</sub></td>
+    <td align="center"><b>10,639</b><br/><sub>reach of the top<br/>fake-review thread</sub></td>
+    <td align="center"><b>+23%</b><br/><sub>insurance premium hike<br/>blamed on AI fraud</sub></td>
+    <td align="center"><b>107.6</b><br/><sub>highest opportunity<br/>score (bots vs humans)</sub></td>
+  </tr>
+</table>
+
+```mermaid
+xychart-beta
+    title "Where the internet hurts — opportunity score = pain x volume x reach"
+    x-axis ["ticketing vs bots", "DeFi vs bots", "creators vs bots", "deepfakes", "fake reviews", "unverifiable claims"]
+    y-axis "opportunity score" 0 --> 120
+    bar [107.6, 101.1, 91.6, 90.8, 79.5, 47.2]
+```
+
+Every bar is the same disease — **nobody can prove a human was behind the evidence** —
+and the two bars on the right are where it collides with physical-world money.
+What the data kept saying:
 
 - **[“My insurance rates went up 23% — AI fraud is wilder than I thought”](https://www.reddit.com/r/Insurance/comments/1uamntf/my_insurance_rates_went_up_again_went_down_a/)** (r/Insurance) — generative AI has made photo evidence forgeable at zero cost, and everyone's premiums are paying for it
 - **[“Farmers denied my claim — neighbor's illegal contractor damaged my house”](https://www.reddit.com/r/Insurance/comments/1h99r16/farmers_denied_claim_neighbors_illegal_contractor/)** (r/Insurance) — real physical-world damage, no verifiable trail of who did what, claim dead
