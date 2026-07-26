@@ -796,9 +796,17 @@ const server = createServer(async (req, res) => {
       verifiedNullifiers.add(nullifier);
       // selfie_check / selfie -> selfie tier; orb / proof_of_human -> orb
       const level = credential.includes("selfie") ? "selfie" : (credential.includes("orb") || credential.includes("human")) ? "orb" : "device";
-      recordTier(nullifier, level);
+      // Demo affordance: an Orb-verified tester enters at cap 100ℏ and never
+      // meets the step-up gate. demoLadder clamps THIS sign-in to device so
+      // the ladder can be walked from the bottom; every later step-up is
+      // still a real World proof. Clamping down is never a privilege gain.
+      if (body.demoLadder === true) {
+        nullifierTier.set(nullifier, "device");
+      } else {
+        recordTier(nullifier, level);
+      }
       const tier = tierOf(nullifier);
-      console.log(`[api] ✅ v4 verified nullifier=${nullifier.slice(0, 14)}… credential=${credential} tier=${tier}`);
+      console.log(`[api] ✅ v4 verified nullifier=${nullifier.slice(0, 14)}… credential=${credential} tier=${tier}${body.demoLadder ? " (demo-clamped)" : ""}`);
       return json(res, 200, {
         ok: true, nullifier, mode: "world-id-v4", credential, tier,
         capHbar: TIER_CAP_HBAR[tier],

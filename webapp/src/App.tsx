@@ -460,6 +460,7 @@ export default function App() {
 
   // ── World ID 4.0 plumbing ─────────────────────────────────────────
   const [worldOpen, setWorldOpen] = useState(false);
+  const [demoLadder, setDemoLadder] = useState(false);
   const [worldKind, setWorldKind] = useState<"gate" | "orb" | "selfie">("gate");
   const [rpContext, setRpContext] = useState<RpContext | null>(null);
   const worldResult = useRef<any>(null);
@@ -522,9 +523,14 @@ export default function App() {
   // idkit response to /api/v4/verify/{rp_id} and returns our session (tier,
   // nullifier, cap). onSuccess then applies it via applyWorldSession.
   const handleWorldVerify = useCallback(async (result: unknown) => {
-    const out = await api<any>("/api/world/verify-v4", { idkitResponse: result });
+    // demoLadder rides only on the gate sign-in: it clamps an Orb-verified
+    // tester to DEVICE tier server-side so the step-up ladder is walkable.
+    const out = await api<any>("/api/world/verify-v4", {
+      idkitResponse: result,
+      demoLadder: demoLadder && worldKind === "gate",
+    });
     worldResult.current = out;
-  }, [worldKind]);
+  }, [worldKind, demoLadder]);
 
   /**
    * Practice runs need a way out that isn't "close the Mini App". Clearing the
@@ -667,7 +673,16 @@ export default function App() {
               Just proof there's a unique human behind this deposit.
             </p>
             {health?.worldAppId ? (
-              <button className="cta" onClick={() => startWorld("gate")}>VERIFY WITH WORLD ID</button>
+              <>
+                <button className="cta" onClick={() => { setDemoLadder(false); startWorld("gate"); }}>VERIFY WITH WORLD ID</button>
+                <button
+                  className="cta ghost"
+                  onClick={() => { setDemoLadder(true); startWorld("gate"); }}
+                  title="Orb-verified? Your first proof already maxes the ladder — this clamps you to DEVICE tier so the step-up flow can be demoed."
+                >
+                  🪜 DEMO THE ASSURANCE LADDER — START AT DEVICE
+                </button>
+              </>
             ) : (
               <>
                 <button className="cta" onClick={verify}>VERIFY PERSONHOOD</button>
