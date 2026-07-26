@@ -807,14 +807,17 @@ const server = createServer(async (req, res) => {
         ...(Array.isArray(r.responses) ? r.responses.map((x: any) => x?.identifier) : []),
         vj.credential_type, vj.verification_level, r.credential_type, r.verification_level,
       ].filter(Boolean).map((x: any) => String(x).toLowerCase());
+      // World's v4 verifier names the Selfie Check credential "face" — not
+      // "selfie" like the idkit preset. Learned live: a passed Selfie Check
+      // came back credential=face and fell through to device tier.
       const credential =
-        identifiers.find((i) => i.includes("selfie")) ??
+        identifiers.find((i) => i.includes("selfie") || i.includes("face")) ??
         identifiers.find((i) => i.includes("orb") || i.includes("human") || i.includes("passport") || i.includes("document")) ??
         identifiers[0] ?? "device";
       if (!nullifier) return json(res, 400, { error: "verified but no nullifier found — inspect payload", detail: vj });
       verifiedNullifiers.add(nullifier);
       // selfie_check / selfie -> selfie tier; orb / proof_of_human -> orb
-      const level = credential.includes("selfie") ? "selfie" : (credential.includes("orb") || credential.includes("human")) ? "orb" : "device";
+      const level = (credential.includes("selfie") || credential.includes("face")) ? "selfie" : (credential.includes("orb") || credential.includes("human")) ? "orb" : "device";
       // Demo affordance: an Orb-verified tester enters at cap 100ℏ and never
       // meets the step-up gate. demoLadder clamps THIS sign-in to device so
       // the ladder can be walked from the bottom; every later step-up is
