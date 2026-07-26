@@ -39,6 +39,7 @@ type EvidenceResult = {
   geo?: { lat: number; lng: number; acc?: number | null } | null;
   teeVerified?: boolean | null;
   computeModel?: string | null;
+  agentFee?: { tx: string; amountTinybar: string; agent: string } | null;
   signature: string;
   verifier: string;
   txHash?: string;
@@ -359,6 +360,7 @@ function Receipt({
                       ? <>0G&nbsp;COMPUTE · {(r.computeModel ?? "").replace("qwen/", "")}{r.teeVerified ? <b className="ink-pass"> · TEE&nbsp;SIG&nbsp;✓</b> : " · sig unverified"}</>
                       : r.brain === "openai" ? (checkout as any).verifierBrain === "0g-compute" ? "GPT VISION (fallback)" : "GPT VISION" : r.brain}</td></tr>
                     <tr><td>signature</td><td><Hash value={r.signature} chars={16} /></td></tr>
+                    {r.agentFee && <tr><td>agent&nbsp;fee</td><td>{(Number(r.agentFee.amountTinybar) / 1e8).toFixed(2)}&nbsp;ℏ&nbsp;→&nbsp;verifier&nbsp;agent <Hash value={r.agentFee.tx} href={exp ? `${exp}/transaction/${r.agentFee.tx}` : null} chars={10} /></td></tr>}
                     {r.txHash && <tr><td>verdict&nbsp;tx</td><td><Hash value={r.txHash} href={exp ? `${exp}/transaction/${r.txHash}` : null} chars={16} /></td></tr>}
                     {r.geo && <tr><td>geo</td><td>{r.geo.lat.toFixed(5)}, {r.geo.lng.toFixed(5)} (±{r.geo.acc ?? "?"}m)</td></tr>}
                   </tbody></table>

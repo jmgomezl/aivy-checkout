@@ -119,6 +119,8 @@ sequenceDiagram
     A->>S: store evidence blob → public root hash
     A->>AI: judge condition + challenge compliance
     AI-->>A: itemized verdict, signature-verified inference
+    A->>H: pay the verifier agent 0.1 ℏ for the verdict (PASS or FAIL)
+    Note over A,AI: the agent EARNS per judgement — fee is verdict-independent
     A->>H: verifyItemAndRelease(verdict, signature)
     Note over H: contract ecrecovers the signature itself
     H-->>T: last item passes → deposit transfers in the SAME call
@@ -151,6 +153,8 @@ flowchart LR
         HCS[HCS topic<br/>immutable receipts]
     end
     W[World ID 4.0<br/>Device / Selfie / Orb]
+    AGW[💰 Verifier agent wallet<br/>earns HBAR per verdict]
+    EXT[🤖 External agents<br/>x402 · pay-per-inspection]
 
     TG -->|proof| W --> API
     TG -->|evidence| API
@@ -158,6 +162,9 @@ flowchart LR
     API --> ST
     API --> REL --> ESC
     ESC -->|Released event| REL --> HCS
+    REL -->|0.1 ℏ per verdict| AGW
+    EXT -->|HTTP 402 → X-PAYMENT| API
+    EXT -->|0.1 ℏ per request| AGW
 ```
 
 One engine, six inspection templates (rental, vehicle, scooter, delivery, expense
@@ -184,6 +191,7 @@ already paid" works as a product.
 | **Native HBAR** value transfer | The deposit itself — no token overhead where none is needed | every `Released` tx |
 | **HCS** (Consensus Service) | A **full lifecycle audit trail**, not just a terminal receipt: `checkout_created → nonces_committed → verdict_signed (per item) → escrow_released`, each consensus-timestamped and publicly ordered — watch the topic fill in real time during a checkout | [topic `0.0.9736741`](https://hashscan.io/testnet/topic/0.0.9736741) |
 | JS SDK (`@hashgraph/sdk`) | HCS topic creation + receipt sealing from the agent | `offchain/relayer.ts`, `api-server.ts` |
+| **Agent economy** — native HBAR fees | The verifier agent is an **economically separate actor**: the platform pays it **0.1 ℏ per verdict** into [its own wallet](https://hashscan.io/testnet/account/0x732Daf3D26A3a1F7f9978d006A5F099b0Fa00f5E), and external agents pay the same wallet via x402 — every fee is a Hashscan-visible transaction, linked on the receipt | `agent fee` line on every receipt |
 
 **Privacy by construction on the public record:** item descriptions travel to HCS
 as keccak hashes (provably fixed at creation, never revealed — reveal the text later
@@ -195,6 +203,23 @@ doorstep. Private metadata, public consensus.
 verdict signature *and transfers in the same call*. There is no "host approves payout"
 step anywhere in the system — the human who owes the money cannot withhold it once the
 condition proves. That is what agentic payments should mean.
+
+**The AI is a paid worker, not a free subroutine — value flows BOTH directions:**
+
+1. **The agent's judgement moves escrowed money** — a signed verdict releases the
+   deposit autonomously (the hard direction: AI judgement as the load-bearing
+   condition for value transfer).
+2. **Money moves TO the agent for judging** — every inspection pays the verifier
+   agent **0.1 ℏ in native HBAR** into its own wallet
+   ([`0x732D…0f5E`](https://hashscan.io/testnet/account/0x732Daf3D26A3a1F7f9978d006A5F099b0Fa00f5E)),
+   internally per verdict and externally per x402 request. The fee is paid
+   **PASS or FAIL** — the agent earns for judging, never for approving, so its
+   income cannot bias its verdicts.
+
+The economics this unlocks: an AI verifier with **its own balance sheet** — revenue
+per judgement today; paying for its own 0G inference out of earnings tomorrow. A
+sub-cent, seconds-final fee rail is what makes a 0.1 ℏ per-verdict wage viable at
+all — this business cannot exist on a chain where the fee costs more than the work.
 
 **Novel vs. prior art:** escrows are old; escrows whose release condition is a
 *cryptographically verified AI judgement of physical reality* — with the anti-replay
@@ -211,7 +236,9 @@ request** to buy one signed inspection verdict from Aivy's verifier.
 HBAR transfer on Hedera testnet and retries with the transaction id, which we
 verify against the **public mirror node** (recipient, amount ≥ price, ≤10 min old,
 one inspection per tx) before running the verdict and signing the response with
-the same key the escrow contract trusts.
+the same key the escrow contract trusts. External x402 revenue lands in the **same
+agent wallet** that earns the internal per-verdict fees — one worker, one balance
+sheet, two customer types.
 
 ```bash
 # see the 402 challenge (also demoable live from the app's footer panel)

@@ -559,6 +559,30 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
     imagePath,
   }, meta.brain);
 
+  // ── the verifier agent gets PAID for this verdict ────────────────────
+  // The agent is an economically separate actor: the platform pays it a fee
+  // in native HBAR for every inspection it performs — win or lose, PASS or
+  // FAIL, so the fee can never bias the verdict. Same agent, same wallet,
+  // also earns from external callers via x402. Fail-soft: a fee-payment
+  // hiccup must never block a settlement; the receipt then says unpaid.
+  let agentFee: { tx: string; amountTinybar: string; agent: string } | null = null;
+  if (process.env.AGENT_PAY_ENABLED === "1" && process.env.AGENT_WALLET) {
+    try {
+      const feeTinybar = BigInt(process.env.AGENT_FEE_TINYBAR ?? "10000000"); // 0.1 ℏ
+      // relayer is the NonceManager — keeps this transfer ordered with the
+      // contract call below instead of racing it
+      const feeTx = await relayer.sendTransaction({
+        to: process.env.AGENT_WALLET,
+        value: feeTinybar * 10n ** 10n, // tinybar -> 18-dec weibar for the relay
+      });
+      const feeRc = await feeTx.wait();
+      agentFee = { tx: feeRc!.hash, amountTinybar: feeTinybar.toString(), agent: process.env.AGENT_WALLET };
+      console.log(`[agent-pay] verdict fee ${feeTinybar} tinybar -> ${process.env.AGENT_WALLET} (${feeRc!.hash})`);
+    } catch (e: any) {
+      console.warn("[agent-pay] fee payment failed (verdict continues unpaid):", e?.message ?? e);
+    }
+  }
+
   const v: ItemVerdict = {
     checkoutId: BigInt(id),
     itemId: itemIdOf(item.name),
@@ -585,6 +609,7 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
     brain: verdict.brain,
     teeVerified: verdict.teeVerified ?? null,
     computeModel: verdict.computeModel ?? null,
+    agentFeeTx: agentFee?.tx ?? null,
     imageHash: stored.imageHash,
     evidenceUri: stored.uri,
     signature: sig,
@@ -599,6 +624,7 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
     verdict: verdict.pass ? "PASS" : "FAIL",
     brain: verdict.brain,
     teeVerified: verdict.teeVerified ?? null,
+    agentFeeTx: agentFee?.tx ?? null,
     imageHash: stored.imageHash,
     storageRoot: stored.root ?? null,
     descHash: keccak256(toUtf8Bytes(item.desc)),
@@ -620,6 +646,7 @@ async function submitEvidence(id: number, itemName: string, imageDataUrl: string
     brain: verdict.brain,
     teeVerified: verdict.teeVerified ?? null,
     computeModel: verdict.computeModel ?? null,
+    agentFee,
     imageHash: stored.imageHash,
     evidenceUri: stored.uri,
     storageRoot: stored.root ?? null,
