@@ -824,14 +824,24 @@ const server = createServer(async (req, res) => {
       // meets the step-up gate. demoLadder clamps THIS sign-in to device so
       // the ladder can be walked from the bottom; every later step-up is
       // still a real World proof. Clamping down is never a privilege gain.
-      // In a demo-clamped session, World App presents its strongest
-      // credential (an Orb-verified tester gets orb even on the selfie
-      // step-up, with no re-capture — credentials are reusable). Cap the
-      // selfie step at selfie tier so the ladder's middle rung is visible.
-      // Capping down is never a privilege gain.
-      const capped: typeof level =
-        demoClamped.has(nullifier) && body.stepKind === "selfie" && level === "orb" ? "selfie" : level;
-      recordTier(nullifier, capped);
+      if ((body.stepKind ?? "gate") === "gate") {
+        // Product rule (owner's call): the gate sign-in only ever proves
+        // "unique human" — every session STARTS at device tier, premium
+        // locked, regardless of how strong the presented credential is.
+        // Assurance is demonstrated by explicitly stepping up, not
+        // inherited silently; an Orb-verified user unlocks in one tap
+        // (World reuses their credential, no re-capture). Also makes the
+        // ladder demoable on every fresh sign-in.
+        nullifierTier.set(nullifier, "device");
+      } else {
+        // Step-up: World presents its strongest credential (an Orb-verified
+        // human gets orb even on the selfie step). Record the RUNG THAT WAS
+        // CLIMBED, capped at what was asked: the selfie step yields selfie
+        // tier. Capping down is never a privilege gain.
+        const capped: typeof level =
+          body.stepKind === "selfie" && level === "orb" ? "selfie" : level;
+        recordTier(nullifier, capped);
+      }
       const tier = tierOf(nullifier);
       console.log(`[api] ✅ v4 verified nullifier=${nullifier.slice(0, 14)}… credential=${credential} tier=${tier}${body.demoLadder ? " (demo-clamped)" : ""}`);
       return json(res, 200, {
