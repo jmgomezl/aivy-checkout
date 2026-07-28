@@ -346,8 +346,14 @@ async function createDemoCheckout(nullifier: string, tenantAddress?: string, tem
   if (existing && checkoutMeta.has(existing)) {
     const meta0 = checkoutMeta.get(existing)!;
     const c = await escrow.getFunction("getCheckout")(existing);
-    // resume only if same template still in progress; else start fresh
-    if (c.status === 2n && meta0.template === (tpl ? tpl.title : "Custom Inspection")) return describeCheckout(existing);
+    // Resume only if same template, still in progress, AND the on-chain
+    // deadline still has real room. Resuming an expired (or about-to-expire)
+    // case hands the user a checkout where every capture reverts with
+    // PastDeadline — learned live: it made the whole app feel broken.
+    const secondsLeft = Number(c.deadline) - Math.floor(Date.now() / 1000);
+    if (c.status === 2n && secondsLeft > 120 && meta0.template === (tpl ? tpl.title : "Custom Inspection")) {
+      return describeCheckout(existing);
+    }
   }
 
   // Unpredictable: createCheckout is unauthenticated on-chain, so a guessable
@@ -1011,7 +1017,11 @@ const server = createServer(async (req, res) => {
     return json(res, 404, { error: "not found" });
   } catch (e: any) {
     console.error(`[api] ${req.method} ${path} ->`, e?.message ?? e);
-    return json(res, 400, { error: String(e?.message ?? e) });
+    let msg = String(e?.message ?? e);
+    // contract custom errors surface as raw selectors — translate the ones
+    // a user can actually hit into words (0x81efbd8d = PastDeadline())
+    if (msg.includes("0x81efbd8d")) msg = "This checkout's time window expired — go back and start a new one.";
+    return json(res, 400, { error: msg });
   }
 });
 
